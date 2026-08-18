@@ -1,0 +1,113 @@
+We are now ingesting Job #7: DiamondIQ_27_Article_PDF_Transcriptions.xlsx.
+
+Do NOT make me manually classify or map 28 worksheets. This workbook was intentionally structured as a SOURCE INDEX plus 27 individually transcribed source articles. Build only the minimum logic necessary to ingest this workbook correctly and preserve provenance. Do not redesign the ingestion system.
+
+IMPORTANT: Do not commit anything yet. First perform the bulk classification/mapping and give me a concise preview for approval.
+
+1. SOURCE INDEX
+The "SOURCE INDEX" worksheet is metadata/provenance, NOT baseball factual records and NOT draft_players data.
+
+Use it to establish the identity and provenance of each of the 27 article sources, including whatever fields are actually present in the worksheet such as:
+- Source #
+- PDF File
+- Worksheet
+- PDF Pages
+- article/source information
+- notes or other source metadata
+
+Do not fabricate missing metadata.
+
+The SOURCE INDEX should not create draft_players records or be treated as L1 baseball facts.
+
+2. THE 27 ARTICLE WORKSHEETS
+Each article worksheet represents ONE distinct source document.
+
+Bulk-classify all 27 article worksheets as article/research source material while preserving each worksheet as its own independent source.
+
+Do not require manual mapping of each worksheet if they share the transcription structure.
+
+3. PRESERVE THE TRANSCRIPTION
+The purpose of this workbook is to make OSM's accumulated research library queryable by DiamondIQ.
+
+Preserve the substantive information transcribed from each article, including factual statements, tables, statistics, quotations/excerpts, source-attributed analysis, historical information, draft information, signing/bonus information, methodology/context, and OSM transcription notes where present.
+
+Do not discard information merely because it does not map to draft_players or another existing narrow canonical table.
+
+If the current schema cannot store the article transcription faithfully, use the existing osm_articles / osm_article_annotations research architecture where appropriate. Make only the minimum schema adjustment necessary if the existing article tables cannot preserve the transcription.
+
+4. EVIDENCE / PROVENANCE RULE
+An article is a SOURCE, not DiamondIQ's own analysis.
+
+Information transcribed directly from an article must remain attributed to that article/source.
+
+Do NOT automatically convert:
+- article author opinions,
+- projections,
+- estimates,
+- analysis,
+- scouting opinions,
+- predictions,
+- or other source-authored judgments
+
+into "Verified Public Information" simply because they appeared in a published article.
+
+Preserve what the source actually said and distinguish source-reported facts from source-authored analysis/opinion when the workbook provides enough information to do so.
+
+Do NOT turn source-authored analysis into L4 DiamondIQ Inference.
+
+L4 is reserved for analysis/inference DiamondIQ itself later generates from the evidence base.
+
+5. ZERO FABRICATION
+Absolutely no filling gaps from AI/model knowledge.
+
+Do not:
+- infer missing values,
+- invent dates,
+- invent players,
+- invent statistics,
+- complete partial quotations,
+- normalize uncertain information into certainty,
+- supplement the articles from model knowledge,
+- or generate new research findings during ingestion.
+
+If information is absent or unclear, preserve it as absent/unclear.
+
+6. SOURCE TRACEABILITY
+Every stored article-derived record or annotation must remain traceable back to at least:
+- Job #7
+- source file version
+- SOURCE INDEX source number where available
+- original PDF filename where available
+- article worksheet
+- original workbook row
+- PDF page/page range where supplied
+- original field/category where applicable
+
+I need DiamondIQ eventually to be able to show where information came from.
+
+7. DO NOT CREATE DUPLICATE "FACTS"
+If an article corroborates information already stored from the Excel datasets, preserve the article as an additional source assertion/citation where appropriate rather than blindly creating another canonical record.
+
+Do not overwrite existing Job #3/#4 factual data merely because an article mentions the same information.
+
+8. BULK PROCESSING
+Apply these rules across all 27 article worksheets automatically.
+
+I should not have to review and configure each article individually unless the system detects a genuine ambiguity that could materially change the meaning or evidence classification.
+
+9. STOP BEFORE COMMIT
+After bulk classification/mapping, STOP.
+
+Report only:
+- confirmation that SOURCE INDEX was recognized as metadata/provenance
+- number of article worksheets detected (expected 27)
+- total transcription rows/content units proposed for preservation
+- how many will be stored as article/source content
+- any canonical factual records proposed
+- any source assertions/corroborations proposed
+- any rows the system proposes to skip and WHY
+- any genuine ambiguities requiring my decision
+- confirmation that ZERO DiamondIQ-generated inference was created from ingestion
+- confirmation that nothing has been committed yet
+
+Do not add new dashboards, scoring systems, workflows, evidence frameworks, or unrelated features. The immediate objective is simply to ingest the 27-source research library faithfully, efficiently, and with provenance intact.
