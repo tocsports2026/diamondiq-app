@@ -143,6 +143,12 @@ const OSM_PROPRIETARY_PATTERNS = [
   /proprietary/i,
   /agent\s*notes?/i,        // "Agent Notes"
   /scout\s*notes?/i,        // "Scout Notes"
+  // OSM analyst interpretation columns — must NOT fall through to Verified Public Information
+  /pattern.*\/.*read/i,     // "Pattern / Read" — OSM analyst's qualitative read on a club
+  /pattern.*read/i,
+  /analyst\s*notes?/i,
+  /analyst\s*read/i,
+  /osm\s*read/i,
 ];
 
 function detectColumnEvidenceLabel(header: string): string {
@@ -190,22 +196,77 @@ const CANONICAL_FIELD_HINTS: Array<{ patterns: RegExp[]; field: string; table: s
   // OSM proprietary notes — prefer osm_notes over generic notes wherever schema supports it
   { patterns: [/osm\s*notes?/i, /osm\s*comment/i, /osm\s*remark/i, /internal\s*notes?/i, /agent\s*notes?/i, /scout\s*notes?/i], field: "osm_notes", table: "draft_players" },
   // ── club_payroll_history ──────────────────────────────────────────────────
+  // More-specific patterns FIRST so they shadow the broader ones below.
+  // "Times Over CBT Threshold" is a COUNT, not the threshold dollar value —
+  // must come before the cbt_threshold hint or it will be shadowed.
+  { patterns: [/times\s*over\s*cbt/i, /times.*cbt.*threshold/i, /cbt.*times/i], field: "times_over_cbt", table: "club_payroll_history" },
   { patterns: [/total\s*payroll/i, /payroll\s*total/i], field: "total_payroll", table: "club_payroll_history" },
   { patterns: [/cbt\s*threshold/i, /luxury\s*tax\s*threshold/i], field: "cbt_threshold", table: "club_payroll_history" },
   { patterns: [/luxury\s*tax\s*paid/i, /cbt\s*paid/i], field: "luxury_tax_paid", table: "club_payroll_history" },
   { patterns: [/over.{0,5}under\s*cbt/i, /cbt\s*over/i, /cbt\s*under/i], field: "cbt_overage", table: "club_payroll_history" },
+  // Calculated aggregates — labelled Calculated Results at evidence classification time.
+  // Pattern: explicit "payroll" variants + generic N-yr-avg (context resolved by sheetContext).
+  { patterns: [/\d.yr\s*avg.*payroll/i, /payroll.*\d.yr\s*avg/i, /\d.yr\s*avg\b/i, /\bN.yr\s*avg\b/i], field: "avg_5yr_payroll", table: "club_payroll_history" },
+  { patterns: [/cagr.*payroll/i, /payroll.*cagr/i], field: "cagr_5yr_payroll", table: "club_payroll_history" },
   // ── club_draft_spend_history ──────────────────────────────────────────────
+  // More-specific vs/percentage patterns FIRST so they shadow the avg_5yr_pool hint.
+  { patterns: [/pool\s*vs\s*\d.yr/i, /\d.yr.*pool.*pct/i, /pool.*avg.*pct/i, /pool.*vs.*avg/i, /vs.*\d.yr.*avg/i], field: "pool_vs_5yr_avg_pct", table: "club_draft_spend_history" },
   { patterns: [/total\s*draft\s*spend/i, /draft\s*spend\s*total/i, /draft\s*spending/i], field: "total_draft_spend", table: "club_draft_spend_history" },
-  { patterns: [/pool\s*allot/i, /draft\s*pool/i, /^allot/i], field: "pool_allotment", table: "club_draft_spend_history" },
+  { patterns: [/pool\s*allot/i, /draft\s*pool/i, /bonus\s*pool/i, /^allot/i], field: "pool_allotment", table: "club_draft_spend_history" },
   { patterns: [/over.{0,5}under\s*pool/i, /pool\s*over/i, /pool\s*under/i], field: "over_under_pool", table: "club_draft_spend_history" },
+  // Calculated aggregates for draft spend.
+  { patterns: [/\d.yr\s*avg.*pool/i, /pool.*\d.yr\s*avg/i, /avg\s*pool/i], field: "avg_5yr_pool", table: "club_draft_spend_history" },
+  { patterns: [/cagr.*pool/i, /cagr.*spend/i, /spend.*cagr/i], field: "cagr_5yr_spend", table: "club_draft_spend_history" },
+  // OSM analyst qualitative read column — stored as OSM Proprietary Data
+  { patterns: [/pattern.*\/.*read/i, /pattern.*read/i, /osm.*read/i, /analyst.*read/i], field: "osm_pattern_read", table: "club_draft_spend_history" },
+  // First-round pick in the context of a draft spend projection sheet
+  { patterns: [/draft\s*pick.*1st\s*rd/i, /1st\s*rd.*draft\s*pick/i, /first.*round.*pick/i, /draft\s*pick.*first/i], field: "first_round_pick", table: "club_draft_spend_history" },
   // ── Wide-format year columns (e.g. "2021", "2022" as column headers) ──────
   // These mark a columnar/pivoted layout. The commit step must unpivot them
-  // into one row per (club, season). Admin sees this as the suggested field.
+  // into one row per (club, season). The suggested table is resolved at runtime
+  // based on sheet context — see suggestCanonicalField() sheetContext logic.
   { patterns: [/^(19|20)\d{2}$/], field: "season_column__requires_unpivot", table: "club_payroll_history" },
 ];
 
-function suggestCanonicalField(header: string): { field: string; table: string } | null {
+/**
+ * Suggest a canonical field for a column header.
+ * Pass `sheetContext` (the worksheet name) for context-sensitive resolution of
+ * ambiguous headers like "Club" or year-number columns, which map to different
+ * tables depending on whether the sheet contains player data or club-financial data.
+ */
+function suggestCanonicalField(
+  header: string,
+  sheetContext?: string
+): { field: string; table: string } | null {
   const h = String(header ?? "").trim();
+  const ctx = sheetContext ?? "";
+
+  // ── Context-sensitive overrides (run before generic hints) ─────────────────
+  const isPayrollSheet = /payroll|cbt|luxury/i.test(ctx);
+  const isSpendSheet   = /spend|pool|draft.*hist/i.test(ctx);
+  const isProjSheet    = /projection|forecast|estimate/i.test(ctx);
+  const isClubFinancial = isPayrollSheet || isSpendSheet || isProjSheet;
+
+  // "Club" in a financial/payroll sheet → correct club table, not draft_players.
+  if (isClubFinancial && /^club$/i.test(h)) {
+    return isPayrollSheet
+      ? { field: "mlb_org", table: "club_payroll_history" }
+      : { field: "mlb_org", table: "club_draft_spend_history" };
+  }
+
+  // Year-pivot columns: resolve to the table appropriate for the sheet.
+  if (/^(19|20)\d{2}$/.test(h)) {
+    if (isPayrollSheet) {
+      return { field: "season_column__requires_unpivot", table: "club_payroll_history" };
+    }
+    if (isSpendSheet || isProjSheet) {
+      return { field: "season_column__requires_unpivot", table: "club_draft_spend_history" };
+    }
+    // Generic fallback for year-pivot columns on unclassified sheets.
+    return { field: "season_column__requires_unpivot", table: "club_payroll_history" };
+  }
+
+  // ── Generic hints ───────────────────────────────────────────────────────────
   for (const hint of CANONICAL_FIELD_HINTS) {
     if (hint.patterns.some((p) => p.test(h))) {
       return { field: hint.field, table: hint.table };
@@ -452,7 +513,7 @@ function parseWorkbook(filePath: string, fileExt: string): {
       const h = header ?? `Column_${idx + 1}`;
       const sampleValues = sampleRows.map((row) => row[idx] ?? null);
       const allNull = sampleValues.every((v) => v === null || v === "");
-      const suggestion = suggestCanonicalField(h);
+      const suggestion = suggestCanonicalField(h, sheetName);
       const evidenceLabel = detectColumnEvidenceLabel(h);
       return {
         index: idx,

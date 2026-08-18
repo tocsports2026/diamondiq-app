@@ -1,0 +1,193 @@
+The reparse looks substantially better. Before we build Stage 5, I want the schema and mappings corrected so we do not commit incorrectly classified data.
+
+DO NOT COMMIT ANY PRODUCTION DATA YET.
+
+Make the following corrections and then show me the proposed corrected schema/mapping for approval.
+
+1. PAYROLL & CBT HISTORY
+
+This is CLUB-LEVEL historical data. Nothing on this worksheet should map to draft_players.
+
+Correct mappings:
+
+Club → club_payroll_history.mlb_org
+
+The 2021–2026 payroll columns must be unpivoted into normalized records containing:
+- mlb_org
+- season
+- payroll_amount
+
+5-Yr Avg (21-25):
+- Preserve it
+- Label it Calculated Results
+- Do not treat it as independently verified factual/source data
+
+5-Yr CAGR (21→25):
+- Preserve it
+- Label it Calculated Results
+- Do not treat it as independently verified factual/source data
+
+Times Over CBT Threshold (21-25):
+- DO NOT map this to cbt_threshold
+- This is a count, not a threshold dollar amount
+- Create an appropriate field such as times_over_cbt_2021_2025
+- Preserve its calculated-result provenance
+
+Blank/spacer columns should be skipped.
+
+2. DRAFT SPEND HISTORY
+
+This is also CLUB-LEVEL historical data. Nothing on this worksheet should map to draft_players.
+
+Club → club_draft_spend_history.mlb_org
+
+The historical year columns must be normalized/unpivoted into club/year records using the appropriate value represented by the worksheet.
+
+2026 Draft Pool (Released):
+→ club_draft_spend_history.pool_allotment
+→ Verified Public Information
+
+Totals, averages, percentage changes, and other derived values:
+→ Preserve
+→ Label Calculated Results
+→ Do not represent them as independently sourced factual values
+
+IMPORTANT:
+Pattern / Read should NOT automatically be classified as Verified Public Information simply because it is text.
+
+Determine its provenance from the workbook. If this is OSM-authored interpretation/research, classify and preserve it as OSM Proprietary Data / Analysis.
+
+Do not discard OSM-authored observations.
+
+Blank/spacer columns should be skipped.
+
+3. 2026 DRAFT PROJECTION
+
+This worksheet mixes verified public information, calculated results, and OSM/DiamondIQ analysis.
+
+Club must map to an appropriate CLUB-LEVEL table, NOT draft_players.mlb_org.
+
+2026 Draft Pick (1st Rd):
+- Preserve it
+- Create an appropriate club-level field/table relationship
+- Do not discard it merely because the current schema lacks a field
+
+2026 Bonus Pool (Official, $):
+→ Verified Public Information
+→ club_draft_spend_history.pool_allotment or the appropriate normalized club/year record
+
+Historical averages, historical percentages, CBT tier calculations, etc.:
+→ Calculated Results
+
+Projected 2026 TOTAL Draft Spend:
+→ DiamondIQ Analysis / Inference
+
+Projected $ Above Pool:
+→ DiamondIQ Analysis / Inference
+
+Projection Confidence:
+→ DiamondIQ Analysis / Inference
+
+4. CRITICAL RULE ABOUT "SKIP"
+
+defaultSkip = true must NOT mean "delete this information from DiamondIQ."
+
+It means:
+DO NOT INGEST THIS VALUE AS VERIFIED FACTUAL EVIDENCE.
+
+We need to preserve legitimate OSM research, calculations, projections, interpretations, notes, and analytical work in appropriate tables/fields with their provenance intact.
+
+DiamondIQ needs four clearly distinguishable evidence classes:
+
+A. VERIFIED PUBLIC INFORMATION
+Externally sourced factual evidence.
+
+B. CALCULATED RESULTS
+Mathematical results derived from verified source data.
+
+C. OSM PROPRIETARY DATA / ANALYSIS
+OSM-authored research, notes, observations, internal information, methodology, and analysis.
+
+D. DIAMONDIQ ANALYSIS / INFERENCE
+System-generated interpretations, projections, or inferences.
+
+These classes must remain distinguishable at storage, retrieval, report generation, and citation.
+
+5. PRESERVE SOURCE PROVENANCE
+
+The preamble/source rows successfully detected during the reparse must remain attached to the imported dataset/source version.
+
+Do not discard them during normalization or commit.
+
+Every normalized factual record should be traceable, where applicable, to:
+
+- source file/version
+- source file SHA-256
+- worksheet
+- original Excel row
+- original Excel column/header
+- ingestion job
+- evidence classification
+- source/provider
+- source notes/preamble
+- import timestamp/version
+
+Calculated and analytical records should additionally identify the factual source records/dataset version from which they were derived whenever possible.
+
+6. DATA-FIRST ARCHITECTURE
+
+This is fundamental to DiamondIQ.
+
+DiamondIQ must use OSM's compiled research database as the primary evidence source.
+
+When answering questions or generating reports, the intended order is:
+
+1. Retrieve relevant verified factual data.
+2. Retrieve relevant OSM proprietary research/notes.
+3. Use stored calculated results where applicable or calculate from verified data.
+4. Only then perform DiamondIQ analysis/inference if needed.
+5. Clearly label the provenance/evidence type of the resulting information.
+
+The application must NEVER silently substitute AI/model knowledge for missing OSM data.
+
+If required evidence does not exist in the DiamondIQ database, the system should identify the missing information rather than fabricate or approximate it.
+
+7. THIS WORKBOOK IS ONLY ONE PART OF THE RESEARCH DATABASE
+
+Design this ingestion architecture to support the complete OSM DiamondIQ research repository.
+
+The repository currently consists of:
+- 4 Excel research workbooks
+- 21 research articles with OSM notes
+
+Therefore, do not make schema decisions that work only for this particular Excel workbook.
+
+The article/notes ingestion stage will also need to preserve:
+- article/source identity
+- title
+- publisher/source
+- publication date when available
+- source URL when available
+- article content/excerpts as permitted
+- OSM notes
+- subjects/topics/entities
+- evidence classification
+- provenance
+- source version
+
+Those research articles and OSM notes ultimately need to be searchable/retrievable by DiamondIQ alongside the structured Excel data.
+
+8. NEXT STEP — DO NOT BUILD STAGE 5 YET
+
+First:
+
+A. Correct the mapping logic above.
+B. Propose any new tables/fields required.
+C. Show me how the four evidence classes will be stored.
+D. Show me how calculated/analytical records will retain links to their underlying source data.
+E. Show me the corrected mapping for this workbook.
+F. Confirm that nothing has yet been committed to production data tables.
+
+STOP after presenting that plan.
+
+Do not implement Stage 5 and do not commit the workbook until I explicitly approve the proposed architecture.
