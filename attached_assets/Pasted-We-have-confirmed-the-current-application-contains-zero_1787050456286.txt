@@ -1,0 +1,101 @@
+We have confirmed the current application contains zero production OSM research data.
+
+DO NOT continue building report-generation functionality from fixtures, hard-coded statistics, or AI/model knowledge.
+
+The next development phase is the DiamondIQ DATA INGESTION + PROVENANCE LAYER.
+
+Before writing any code, create an implementation plan for the following architecture:
+
+OSM RESEARCH SOURCE FILES
+        ↓
+INGESTION / VALIDATION
+        ↓
+STRUCTURED POSTGRESQL RECORDS
+        ↓
+ROW-LEVEL SOURCE PROVENANCE
+        ↓
+DIAMONDIQ QUERY / ANALYTICS ENGINE
+        ↓
+AI INTERPRETATION / REPORT WRITING
+        ↓
+OSM ADMIN REVIEW
+        ↓
+ATHLETE PUBLICATION
+
+Requirements:
+
+1. DATA-FIRST
+DiamondIQ must query verified OSM data before any AI analysis occurs.
+
+2. NO MODEL-KNOWLEDGE SUBSTITUTION
+AI/model knowledge may not supply factual baseball records, rankings, bonuses, draft outcomes, NIL values, statistics, comparable players, or other research facts when those facts are absent from OSM data.
+
+Missing data must produce a clearly identified data gap / Intelligence Request.
+
+3. GOOGLE DRIVE SOURCE
+OSM's existing research archive currently resides in a specific Google Drive folder.
+
+Design the most efficient method for importing/synchronizing ONLY the designated DiamondIQ research folder. Do not request unrestricted access to the entire Google Drive if folder-scoped access or controlled import can accomplish this.
+
+4. MULTIPLE FILE TYPES
+The ingestion architecture should anticipate spreadsheets/CSV/XLSX and other research documents that may contain usable structured or unstructured research.
+
+5. NORMALIZED DATA
+Do not simply store uploaded files as blobs. Relevant research records must become structured, queryable database records.
+
+6. PROVENANCE
+Every imported factual record must retain enough information to identify:
+- source dataset
+- original file
+- source/provider
+- source record/row where applicable
+- import date
+- applicable season/year/date range
+- verification status
+- OSM verification/review information
+- last updated date
+
+7. REPORT TRACEABILITY
+Every factual result included in a DiamondIQ report must be traceable back to the underlying imported records.
+
+8. FIXTURE ISOLATION
+DEV FIXTURE data must be isolated from production intelligence.
+No fixture statistic or fabricated development value may ever appear in an athlete-visible production report.
+
+9. EXISTING DATA LIBRARY
+Evaluate whether the existing data_library schema should become the dataset registry for this system and identify the additional tables/schema required for actual records and provenance.
+
+10. INGESTION MANAGEMENT
+OSM Admin should ultimately be able to see:
+- datasets available
+- source
+- records imported
+- date coverage
+- last update
+- processing status
+- verification status
+- errors/data-quality problems
+- refresh/re-import controls
+
+11. QUERY ENGINE
+Explain how Draft Intelligence will query the structured database for requests such as:
+"Players Like Me — SEC RHP 2015–2026"
+without allowing AI to invent the underlying comparable-player dataset.
+
+12. EXISTING RESEARCH
+Do not recreate research that OSM has already compiled. The objective is to ingest and structure the existing DiamondIQ research archive.
+
+IMPORTANT:
+DO NOT IMPLEMENT ANYTHING YET.
+
+First return:
+A. proposed database/schema changes
+B. Google Drive ingestion approach
+C. supported file ingestion strategy
+D. provenance architecture
+E. Draft Intelligence query architecture
+F. fixture/production separation
+G. implementation sequence
+H. what access, credentials, folder IDs, files, or information you will need from me
+
+Wait for approval before modifying the application.
