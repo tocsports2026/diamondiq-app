@@ -281,6 +281,46 @@ export async function retrieveAndAssembleClubReport(
   );
   recordsByTable["record_source_assertions"] = rsaRows.length;
 
+  // ── L1: Draft players — individual pick/signing records ─────────────────
+  tablesQueried.push("draft_players");
+  const draftPlayerRows = await query<{
+    id: number;
+    draft_year: number;
+    draft_round: number;
+    draft_round_label: string;
+    draft_pick_overall: number;
+    player_name: string;
+    position: string;
+    school: string;
+    school_type: string;
+    player_class: string;
+    outcome_group: string;
+    mlb_rank: number;
+    mlbam_player_id: number;
+    bonus_slot_value: string;
+    bonus_reported: string;
+    signed: boolean;
+    signing_date: string;
+    ndfa_match_status: string;
+    evidence_class: string;
+    ingestion_job_id: number;
+    source_worksheet: string;
+    source_row: number;
+    source_file_version_id: number;
+  }>(
+    `SELECT id, draft_year, draft_round, draft_round_label, draft_pick_overall,
+            player_name, position, school, school_type, player_class,
+            outcome_group, mlb_rank, mlbam_player_id,
+            bonus_slot_value, bonus_reported, signed, signing_date,
+            ndfa_match_status, evidence_class, ingestion_job_id,
+            source_worksheet, source_row, source_file_version_id
+     FROM draft_players
+     WHERE mlb_org = $1 AND is_fixture = FALSE
+     ORDER BY draft_year DESC, draft_round ASC NULLS LAST, draft_pick_overall ASC NULLS LAST`,
+    [club]
+  );
+  recordsByTable["draft_players"] = draftPlayerRows.length;
+
   // ── Ext: Article corpus search ────────────────────────────────────────────
   tablesQueried.push("osm_articles");
   tablesQueried.push("osm_article_transcription_lines");
@@ -411,8 +451,8 @@ export async function retrieveAndAssembleClubReport(
         if (r.penalty_incurred) value += "  ·  ⚠ Penalty incurred";
         if (r.picks_forfeited) value += "  ·  Picks forfeited";
       } else if (pool != null) {
-        // 2026: pool allotment known, actual spend not yet available
-        value = `Actual spend: Not yet available  ·  Pool allotment: ${fmtM(pool)}${r.first_round_pick ? `  ·  Round 1 pick: #${r.first_round_pick}` : ""}`;
+        // pool allotment known but actual spend not yet available
+        value = `Actual spend: Not yet committed  ·  Pool allotment: ${fmtM(pool)}${r.first_round_pick ? `  ·  Round 1 pick: #${r.first_round_pick}` : ""}`;
         dataGaps.push(`Draft year ${r.draft_year}: actual draft spend not yet committed to database.`);
       } else {
         value = "Unavailable";
@@ -461,6 +501,88 @@ export async function retrieveAndAssembleClubReport(
     }
   } else {
     dataGaps.push("Draft spend history: no production records found for this club.");
+  }
+
+  // ── Section B.5: Individual Draft Records (by club) ──────────────────────
+  if (draftPlayerRows.length > 0) {
+    const byYear: Record<number, typeof draftPlayerRows> = {};
+    for (const r of draftPlayerRows) {
+      if (!byYear[r.draft_year]) byYear[r.draft_year] = [];
+      byYear[r.draft_year].push(r);
+    }
+
+    const yearBlocks: Array<{ label: string; rows: Array<{ label: string; value: string }> }> = [];
+
+    for (const yr of Object.keys(byYear).map(Number).sort((a, b) => b - a)) {
+      const players = byYear[yr];
+      const drafted = players.filter((p) => p.outcome_group === "Drafted");
+      const ndfa    = players.filter((p) => p.outcome_group === "Undrafted / NDFA");
+      const rows: Array<{ label: string; value: string }> = [];
+
+      for (const p of drafted) {
+        const roundStr = p.draft_round_label
+          ? `Rd. ${p.draft_round_label}`
+          : p.draft_round
+          ? `Rd. ${p.draft_round}`
+          : "Pick";
+        const pickStr  = p.draft_pick_overall ? ` (#${p.draft_pick_overall} overall)` : "";
+        const classStr = p.player_class ? ` · ${p.player_class}` : "";
+        const posStr   = p.position ? ` · ${p.position}` : "";
+        const schoolStr = p.school ? ` · ${p.school}` : "";
+        const bonusStr = p.bonus_reported != null
+          ? `  Signed: ${fmtM(p.bonus_reported)}`
+          : (p.signed === false ? "  Did not sign (within cutoff)" : "  Bonus: unreported");
+        const rankStr  = p.mlb_rank ? `  MLB.com Rank: #${p.mlb_rank}` : "";
+        rows.push({
+          label: `${roundStr}${pickStr}${classStr}${posStr}${schoolStr}`,
+          value: `${p.player_name}${bonusStr}${rankStr}`,
+        });
+      }
+
+      for (const p of ndfa) {
+        const bonusStr = p.bonus_reported != null ? `  Signed: ${fmtM(p.bonus_reported)}` : "";
+        const classStr = p.player_class ? ` · ${p.player_class}` : "";
+        const posStr   = p.position ? ` · ${p.position}` : "";
+        const schoolStr = p.school ? ` · ${p.school}` : "";
+        rows.push({
+          label: `NDFA${classStr}${posStr}${schoolStr}`,
+          value: `${p.player_name}  (Non-Drafted Free Agent)${bonusStr}`,
+        });
+      }
+
+      yearBlocks.push({
+        label: `${yr} Draft — ${drafted.length} drafted pick${drafted.length !== 1 ? "s" : ""}${ndfa.length > 0 ? `, ${ndfa.length} NDFA signing${ndfa.length !== 1 ? "s" : ""}` : ""}`,
+        rows,
+      });
+    }
+
+    sections.push({
+      id: "draft_individual_records",
+      title: "Individual Draft Records (by Club)",
+      content: {
+        type: "player_records",
+        data: {
+          note: `${draftPlayerRows.length} individual draft/NDFA player record${draftPlayerRows.length !== 1 ? "s" : ""} retrieved for ${club}. Source-provided signing bonuses only — no estimates.`,
+          yearBlocks,
+        },
+      },
+      evidenceLabel: "Verified Public Information",
+    });
+
+    // Add sources for each ingestion job that contributed
+    const jobsSeen = new Set<number>();
+    for (const r of draftPlayerRows) {
+      if (!jobsSeen.has(r.ingestion_job_id)) {
+        jobsSeen.add(r.ingestion_job_id);
+        addSource(
+          "Verified Public Information",
+          `${sfvMap[r.source_file_version_id] || "Draft Signings workbook"}`,
+          `Ingestion Job #${r.ingestion_job_id} · Sheet: ${r.source_worksheet}`
+        );
+      }
+    }
+  } else {
+    dataGaps.push(`Individual draft records: no player-level production records found for ${club}.`);
   }
 
   // ── Section C: Derived Trend Metrics ─────────────────────────────────────
@@ -706,7 +828,7 @@ export async function retrieveAndAssembleClubReport(
     limitationLines.push(
       "• Payroll data reflects official CBT payroll, which may differ from total player compensation including deferrals and incentive clauses.",
       "• Unreported signing bonuses are shown as Unavailable. DiamondIQ does not estimate or fabricate bonus amounts.",
-      "• 2026 draft spend data is projection only; actual spend will be updated when committed to the database.",
+      "• 2026 draft spend data (Dollars Committed) is now reflected from the committed signing workbook. Slot-total pool allotment is separately tracked.",
       "• Article transcription content is verbatim external-source text. No individual claim from the external corpus has been independently verified as fact.",
       "• No model/general AI baseball knowledge was used to fill any missing data in this report."
     );

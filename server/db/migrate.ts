@@ -627,5 +627,23 @@ export async function runMigrations() {
     }
   }
 
+  // ── 11. draft_players: player-level ingestion columns ────────────────────────
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS draft_round_label TEXT`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS player_class TEXT`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS outcome_group TEXT`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS birthplace TEXT`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS dob DATE`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS mlbam_player_id INTEGER`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS mlb_rank INTEGER`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS ndfa_match_status TEXT`);
+
+  // ── 12. club_draft_spend_history: pool-level detail columns ──────────────────
+  await query(`ALTER TABLE club_draft_spend_history ADD COLUMN IF NOT EXISTS selections_count INTEGER`);
+  await query(`ALTER TABLE club_draft_spend_history ADD COLUMN IF NOT EXISTS signings_count INTEGER`);
+  await query(`ALTER TABLE club_draft_spend_history ADD COLUMN IF NOT EXISTS dollars_committed NUMERIC`);
+
+  // ── 13. slot_values: source worksheet tracking ────────────────────────────────
+  await query(`ALTER TABLE slot_values ADD COLUMN IF NOT EXISTS source_worksheet TEXT`);
+
   console.log("Database migrations complete.");
 }

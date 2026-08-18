@@ -1,0 +1,235 @@
+We are ready to finish ingestion and run the next live DiamondIQ test report.
+
+DO NOT redesign the ingestion architecture, add new speculative features, or refactor unrelated code. Use the existing ingestion pipeline, four-layer evidence architecture, provenance rules, deduplication rules, and report retrieval system already built.
+
+CURRENT JOB STATUS:
+- Job #3 — COMPLETE
+- Job #4 — COMPLETE
+- Job #5 — MAPPED
+- Job #6 — MAPPED
+- Job #7 — COMPLETE
+- Job #8 — PREVIEW
+
+Our goal now is to get the remaining real production datasets committed safely and then run another evidence-backed test report.
+
+STEP 1 — JOBS #5 AND #6
+
+Inspect Jobs #5 and #6 and determine exactly why they remain MAPPED rather than COMPLETE.
+
+If their mappings are valid and they are ready for the existing Stage 5 commit process, commit them.
+
+Use the existing deduplication/source-assertion system so overlapping facts already committed from Jobs #3/#4 are not duplicated.
+
+Do not overwrite higher-quality canonical records merely because another workbook contains the same information.
+
+Report:
+- records inserted
+- records deduplicated/corroborated
+- source assertions added
+- conflicts detected
+- any records not committed and why
+
+STEP 2 — JOB #8
+
+Job #8 is:
+DiamondIQ_2026_Draft_Outcomes_and_Undrafted_Population.xlsx
+
+This workbook intentionally contains BOTH drafted and undrafted 2026 athletes.
+
+The undrafted population is NOT secondary data and must not be discarded.
+
+It is important to DiamondIQ's future comparative analysis because we want to compare future prospects against:
+1. drafted players
+2. drafted/signing outcomes
+3. undrafted players
+4. undrafted players who subsequently signed as NDFAs
+
+Preserve those distinctions.
+
+The workbook contains these logical datasets:
+
+DRAFTED 2026
+- 613 drafted players
+- draft round
+- overall pick
+- MLB.com rank where supplied
+- drafting club
+- player ID
+- player
+- class
+- position
+- school
+- slot value
+- sign date
+- signing bonus
+- source provenance
+
+UNDRAFTED 2026
+- 1,724 undrafted players
+- name
+- school
+- birthplace
+- position
+- B/T
+- class
+- height
+- weight
+- DOB
+- any explicitly matched NDFA signing information
+- source provenance
+
+NDFA SIGNINGS 2026
+- 135 explicit non-drafted free-agent signing records
+- club
+- player ID
+- player
+- class
+- position
+- school
+- signing bonus
+- signing date
+- source provenance
+
+CLUB POOLS 2026
+- club-level selections/signings
+- slot/spend information
+- committed dollars
+- overage
+- signing bonus pool
+- source provenance
+
+NDFA MATCH REVIEW
+This is a QA/provenance sheet.
+Do NOT convert uncertain matches into factual player relationships.
+
+IMPORTANT MATCHING RULE:
+
+The workbook only linked NDFA records to the 1,724-player undrafted population when an exact normalized player-name match could be established.
+
+Do not use fuzzy matching to silently connect the remaining records.
+
+If an identity cannot be established confidently from supplied data, preserve it as unresolved rather than guessing.
+
+IMPORTANT OUTCOME RULE:
+
+An undrafted player without an NDFA match must NOT automatically be classified as "did not sign."
+
+The supported fact is:
+UNDRAFTED.
+
+If the supplied data explicitly establishes a later NDFA signing, that can additionally be recorded.
+
+Absence of an NDFA record is not proof the player never signed.
+
+STEP 3 — SCHEMA FIT
+
+Before committing Job #8, inspect the existing player-level schema.
+
+Use existing canonical fields wherever they correctly represent these records.
+
+If the current schema cannot correctly preserve the drafted/undrafted population and their 2026 outcomes, make ONLY the minimal schema additions necessary.
+
+Do not force player records into club-level tables simply because those tables already exist.
+
+Do not discard useful source fields merely because no canonical field currently exists.
+
+Do not create calculated metrics, OSM findings, or DiamondIQ inferences from this workbook during ingestion.
+
+This is source-data ingestion.
+
+STEP 4 — EVIDENCE CLASSIFICATION
+
+Player-level facts supplied directly by these source workbooks should remain factual source records with full provenance.
+
+Do not promote missing information to facts.
+
+Do not generate DiamondIQ conclusions during ingestion.
+
+Preserve:
+- source file
+- source worksheet
+- source row
+- ingestion job
+- source file version
+- original evidence classification
+
+STEP 5 — COMMIT JOB #8
+
+After mapping is correct, use the existing Stage 5 commit process.
+
+Validate after commit:
+
+- 613 drafted-player source records represented
+- 1,724 undrafted-player source records represented
+- 135 explicit NDFA signing records represented
+- undrafted population has NOT been reduced to only NDFA signings
+- no invented "did not sign" statuses
+- no fuzzy identity matches silently committed
+- no duplicate canonical player/outcome records
+- zero fixture records introduced
+- complete provenance retained
+
+Explain any count discrepancy before proceeding.
+
+STEP 6 — DATABASE READINESS AUDIT
+
+After #5, #6 and #8 are handled, give me a SHORT readiness report.
+
+Show:
+
+JOB | STATUS | IMPORTANT RECORDS ADDED | ISSUES
+
+Then report current production counts for the important tables.
+
+Do not give me a long architecture explanation unless something is actually wrong.
+
+STEP 7 — RUN THE TEST
+
+Once the database passes those checks, rerun the same Baltimore Orioles evidence-backed report test we previously ran.
+
+Generate a NEW report reference.
+
+This time the report retrieval system should search the newly committed 2026 player/signing data in addition to the existing:
+- payroll data
+- draft-spend data
+- league facts
+- derived metrics
+- OSM findings
+- DiamondIQ inferences
+- article corpus
+
+Specifically test whether the prior gap:
+
+"2026 draft actual spend not yet available"
+
+can now be resolved from the newly committed 2026 signing records.
+
+Do NOT force the answer to be yes.
+
+Calculate/use 2026 actual draft signing spend only if the committed source records actually support doing so.
+
+Also verify that DiamondIQ can retrieve individual 2026 drafted-player/signing records for Baltimore.
+
+Do not generate facts from general AI/model knowledge.
+
+Use only non-fixture database evidence.
+
+Keep the new report:
+status = pending
+published_at = null
+
+Do not make it athlete-visible.
+
+STOP after generating and verifying the new report.
+
+Give me:
+1. final job statuses
+2. production counts
+3. any unresolved ingestion issues
+4. new report reference
+5. tables queried
+6. number of records retrieved from each
+7. whether the 2026 actual-spend gap was resolved
+8. the exact database evidence used to resolve it, if resolved
+9. confirmation fixture records used = 0
+10. confirmation model/general AI baseball knowledge used = false

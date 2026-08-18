@@ -46,7 +46,7 @@ Supporting tables: methodology_versions, record_derivations, record_source_asser
 ## Methodology Versions (SEEDED)
 Rows seeded on startup: avg_5yr v1.0, cagr_5yr v1.0, count_seasons_over_threshold v1.0, pct_vs_avg v1.0, cbt_payroll_tier v1.0, draft_pool_tier v1.0, sample_size_thresholds v1.0.
 
-## record_source_assertions (NEW TABLE — BUILT)
+## record_source_assertions (BUILT)
 When the same fact appears in multiple worksheets, ONE canonical production record is written.
 Each additional worksheet location is preserved as a record_source_assertions row:
   canonical_record_table, canonical_record_id, worksheet, excel_row, excel_column, asserted_value, conflicts_with_canonical.
@@ -56,101 +56,100 @@ Conflict detection is automatic — conflicts_with_canonical=TRUE if value disag
 - CBT Payroll Tier / Draft Pool Tier: evidence_class='calculated' if OSM defines thresholds in methodology_versions, 'osm_proprietary' if applied by analyst judgment. Admin decides at ingestion review.
 - Assumed Spend Rate: always L3 osm_research_findings / methodology_assumption — NOT a public fact.
 
-## Data-First Retrieval Order (ENGINE RULE — NOT YET BUILT)
-A → verified_public Layer 1 records  
-B → osm_proprietary Layer 3 findings  
-C → calculated Layer 2 metrics (with methodology + derivation chain)  
-D → diamondiq_inference Layer 4 (only if osm_review_status='approved', explicitly labelled)  
-E → DATA GAP → auto-create intelligence_request  
+## Data-First Retrieval Order (ENGINE RULE)
+A → verified_public Layer 1 records (including draft_players)
+B → osm_proprietary Layer 3 findings
+C → calculated Layer 2 metrics (with methodology + derivation chain)
+D → diamondiq_inference Layer 4 (only if osm_review_status='approved', explicitly labelled)
+E → DATA GAP → auto-create intelligence_request
 NEVER silently substitute AI/model knowledge.
 
 ## Ingestion Pipeline Status
 - Stage 1–4 (upload, parse, map, preview): BUILT
-- Stage 5 (commit — write production rows): BUILT AND USED FOR JOB #3
+- Stage 5 (commit — write production rows): BUILT AND IN USE
 - Stage 6 (Google Drive connector): NOT STARTED
 
-## Stage 5 Commit — Key Implementation Details
-- Reads raw workbook from disk via XLSX, NOT from parsed_structure JSON (only has sample rows).
-- Filters Club column to MLB_CLUBS set (30 clubs) before any write — LEAGUE TOTAL and note rows are skipped.
-- All writes in a single pg BEGIN/COMMIT transaction — full rollback on any error.
-- Unpivots year-pivot columns into normalized (club, season) rows.
-- Draft Spend History: 2021-2025 → total_draft_spend; 2026 → pool_allotment (official, not yet actual).
-- Payroll 2026: payroll_data_type='preliminary' (partial season per source preamble).
-- 2026 first_round_pick: UPDATE on existing 2026 draft_spend row from Projection sheet (not a new row).
-- record_source_assertions written for 240 cross-sheet repetitions (0 conflicts found in Job #3).
-- record_derivations written for all L2 metrics and L4 inferences → L1 source records.
-- Requires pool import from db/index.ts (not just query/queryOne) for pg transaction client.
+## Commit Endpoint — Multi-Mode Detection (CRITICAL)
+Detection logic (in this order inside POST /:jobId/commit):
+1. "SOURCE INDEX" sheet → article transcription path (Job #7)
+2. "Drafted 2026" sheet → 2026 draft outcomes path (Job #8)
+3. "Rds. 1-20" sheet → draft signings path (Job #5 and future years)
+4. else → payroll/dedup path (isFirstImport flag decides first-import vs dedup)
 
-## Job #3 — COMMITTED (2021-2026 MLB Draft Payroll and Draft Summaries.xlsx)
-Status: complete  
-Committed: 2026-08-18
+Each path RETURNS early — no fall-through.
 
-| Layer | Table | Rows |
+## Club Abbreviation → Full Org Name (IMPORTANT)
+Draft signings workbooks use abbreviations. Ambiguous short forms:
+- CHI → Chicago Cubs (CWS is listed separately for White Sox)
+- LA → Los Angeles Dodgers (LAA is listed separately for Angels)
+- NY → New York Mets (NYY is listed separately for Yankees)
+- ATH → Athletics (Sacramento/Oakland)
+Lookup map: ABBREV_TO_ORG in ingestion.ts shared helpers section.
+
+## Draft Players Schema — New Columns (Added)
+draft_players: draft_round_label (text), player_class (text), outcome_group (text),
+  birthplace (text), dob (date), mlbam_player_id (integer), mlb_rank (integer), ndfa_match_status (text)
+club_draft_spend_history: selections_count (integer), signings_count (integer), dollars_committed (numeric)
+slot_values: source_worksheet (text)
+
+## club_draft_spend_history — Column Semantics (IMPORTANT)
+- total_draft_spend: Slot Total of Spend (sum of assigned pick slots 1-10) from Draft Spend History sheet
+  — NOT the same as Dollars Committed (actual total bonus paid including overages)
+- pool_allotment: Same value as total_draft_spend for 2021-2025; separately tracked for 2026 from projection
+- dollars_committed: Actual signing bonus total paid (= Slot Total + overage). Distinct from total_draft_spend.
+- over_under_pool: Dollars above or below pool (Dollars Committed - Slot Total)
+- selections_count, signings_count: Filled from 2025 Pools sheet (Job #5) and 2026 Club Pools (Job #8)
+
+## 2026 Actual Spend — DATA GAP NOW RESOLVED
+Job #8 (DiamondIQ_2026_Draft_Outcomes_and_Undrafted_Population.xlsx) committed 2026 actual spend
+(Dollars Committed) into club_draft_spend_history.total_draft_spend for all 30 clubs.
+Example BAL 2026: pool_allotment=$13.11M, total_draft_spend=$13.77M, over_under_pool=$655,200.
+The gap "2026 draft actual spend not yet committed" is CLOSED.
+
+## Job Commit Counts (All Complete)
+
+| Job | Mode | Key Counts |
 |---|---|---|
-| L1 | club_payroll_history | 180 |
-| L1 | club_draft_spend_history | 180 |
-| L2 | derived_metrics | 300 |
-| L3 | osm_research_findings | 99 |
-| L4 | diamondiq_inferences | 90 |
-| — | record_source_assertions | 240 |
-| — | record_derivations | 810 |
-| **Total production** | | **849** |
+| #3 | first-import payroll | 849 canonical rows |
+| #4 | dedup payroll | 849 source assertions, 11 league_facts |
+| #5 | draft_signings_2025 | 746 draft_players, 615 slot_values, 30 pool updates, 30 RSAs |
+| #6 | dedup payroll | 849 source assertions, 11 league_facts |
+| #7 | article_transcription | 27 osm_articles, 6,858 transcription lines |
+| #8 | draft_outcomes_2026 | 2,377 draft_players, 613 slot_values, 30 pool updates |
 
-## L3 Count: 99 vs Dry-Run Expected 41 — Explanation (NOT AN ERROR)
-All 99 are legitimate OSM research findings. Dry-run expected 41 was wrong in three ways:
-1. Correction #7 (Correlation Direction → L3) produces 30 per-club correlation findings — not counted in dry-run total.
-2. Methodology assumptions written 1 per club (30 rows, preserving exact per-club rates) vs dry-run's 3-per-tier estimate.
-3. "KEY LEAGUE-WIDE TRENDS" header row stored as a research_note (9 total, not 8).
-Breakdown: 30 pattern_read + 30 correlation + 30 methodology_assumption + 9 research_note = 99.
+## Draft Player outcome_group Values
+- "Drafted" — picked in Rule 4 Draft (rounds 1-20 and special rounds)
+- "Undrafted" — appeared on undrafted eligibility list, did NOT sign as NDFA
+- "Undrafted / NDFA" — either: undrafted player who signed as NDFA (exact name match found),
+  or NDFA signing with no undrafted list match (stored as separate row)
+Passed-Over Players (Job #5 Rds 11+) → outcome_group = "Undrafted / NDFA"
 
-## L2 Metrics Committed (10 per club × 30 clubs = 300)
-avg_5yr_payroll, cagr_payroll_5yr, times_over_cbt, avg_pool_5yr, cagr_pool_5yr, pool_rank, cbt_payroll_tier, times_penalty_proxy, draft_pool_tier, pct_vs_avg_pool
+## NDFA Deduplication Logic (Job #8)
+Undrafted 2026 sheet rows with Match Method = "Exact normalized name match":
+  → outcome_group updated to "Undrafted / NDFA", NDFA bonus/date/club populated on undrafted row
+NDFA Signings 2026 rows with match_status = "No exact-name match — not linked":
+  → inserted as additional separate draft_players rows
+Result: 1,724 undrafted rows + 57 unmatched NDFA rows = 1,781 non-drafted records in Job #8.
 
-## 9 Admin Mapping Corrections Applied at Stage 5 Commit
-1. Payroll CAGR → L2 cagr_payroll_5yr  
-2. Draft Spend CAGR → L2 cagr_pool_5yr  
-3. 2025 Rank → L2 pool_rank  
-4. CBT Payroll Tier → L2 cbt_payroll_tier (osm_proprietary)  
-5. Times Picked-10-Spots Penalty proxy → L2 times_penalty_proxy  
-6. Draft Pool Tier → L2 draft_pool_tier (osm_proprietary)  
-7. Payroll ↔ Draft Pool Correlation → L3 correlation  
-8. Assumed Total-Spend-vs-Pool Rate → L3 methodology_assumption (per club)  
-9. Times Over CBT Threshold → L2 times_over_cbt (NOT L1)
+## Evidence Retrieval — clubRetrieval.ts (BUILT AND EXTENDED)
+Sections produced for club reports:
+  A: Historical Payroll Profile (club_payroll_history)
+  B: Historical Draft Spending (club_draft_spend_history)
+  B.5: Individual Draft Records (draft_players — NEW)
+  C: Derived Trend Metrics (derived_metrics)
+  D: OSM Research Findings (osm_research_findings)
+  E: DiamondIQ Inferences (diamondiq_inferences)
+  F: Relevant External Research (osm_article_transcription_lines)
+  G: Data Gaps & Limitations
+
+draft_players query: WHERE mlb_org = $club AND is_fixture=FALSE, ORDER BY draft_year DESC, draft_round ASC.
 
 ## Dev Credentials
 Admin: admin@ocmsports.com / DiamondIQ2024!
-Athlete: jackson.miller@demo.com / Athlete2024!
+Athlete profile id=1, user_id=2
 
-## league_facts Table (NEW — committed with Job #4)
-- Stores league-level L1 verified_public facts (not club-specific)
-- Columns: fact_type, season, numeric_value, text_value, evidence_class, full provenance cols, is_fixture
-- UNIQUE (fact_type, season, source_file_version_id)
-- fact_types used so far: 'cbt_threshold', 'league_draft_actual_spend'
-- Indexed on (fact_type, season) and ingestion_job_id
-
-## Commit Endpoint — Dual Mode (IMPORTANT)
-- Detects production table state at commit time
-- isFirstImport = all five production tables empty → runs original first-import path
-- else → runs dedup path: bulk-loads existing canonical IDs, writes source assertions, writes league_facts
-- Both paths share UPDATE JOB STATUS + COMMIT + response
-- Response includes `mode: "dedup"` field to distinguish
-
-## Job #4 — COMMITTED (2021-2025 Club Spending Draft Analysis.xlsx)
-Status: complete
-Committed: 2026-08-18
-
-| Item | Count |
-|---|---|
-| New canonical club-level records | 0 |
-| New league_facts records | 11 (6 CBT threshold + 5 actual spend) |
-| Source assertions written | 849 |
-| Conflicts with Job #3 | 0 |
-| Fixture records introduced | 0 |
-
-CBT thresholds: $210M (2021), $230M (2022), $233M (2023), $237M (2024), $241M (2025), $244M (2026)
-League actual spend: $291.4M, $327M, $313.9M, $374.3M, $392.5M (2021-2025)
-
-## Next Priority (Per OSM Approval)
-- 2 additional Excel workbooks to ingest
-- 21 annotated research articles to ingest (osm_articles + osm_article_annotations pipeline not yet built)
-- Stage 6 (Google Drive connector): NOT STARTED
+## Next Priority
+- Draft and NIL report types still use buildInitialContent() placeholder — evidence engine not yet extended
+- stage 6 (Google Drive connector): NOT STARTED
+- OSM article annotations pipeline (osm_article_annotations): NOT STARTED
+- No remaining stuck MAPPED jobs — all 7 jobs are complete or preview (job #2 = preview test file)

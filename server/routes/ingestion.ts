@@ -1480,6 +1480,590 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
     }
     // ── END ARTICLE TRANSCRIPTION PATH ────────────────────────────────────────
 
+    // ── SHARED HELPERS FOR PLAYER-LEVEL COMMIT PATHS ──────────────────────────
+    // Shared by Job #5 (Rds. 1-20) and Job #8 (Drafted 2026 / Undrafted 2026).
+
+    // Club abbreviation → full MLB org name.
+    // Ambiguous short forms resolved by exclusion: CHI=Cubs (CWS listed separately),
+    // LA=Dodgers (LAA listed separately), NY=Mets (NYY listed separately).
+    const ABBREV_TO_ORG: Record<string, string> = {
+      ARI: "Arizona Diamondbacks",  ATH: "Athletics",       ATL: "Atlanta Braves",
+      BAL: "Baltimore Orioles",     BOS: "Boston Red Sox",  CHI: "Chicago Cubs",
+      CHC: "Chicago Cubs",          CWS: "Chicago White Sox",
+      CIN: "Cincinnati Reds",       CLE: "Cleveland Guardians",
+      COL: "Colorado Rockies",      DET: "Detroit Tigers",  HOU: "Houston Astros",
+      KC:  "Kansas City Royals",    LA:  "Los Angeles Dodgers",
+      LAA: "Los Angeles Angels",    LAD: "Los Angeles Dodgers",
+      MIA: "Miami Marlins",         MIL: "Milwaukee Brewers",
+      MIN: "Minnesota Twins",       NY:  "New York Mets",   NYM: "New York Mets",
+      NYY: "New York Yankees",      OAK: "Athletics",       PHI: "Philadelphia Phillies",
+      PIT: "Pittsburgh Pirates",    SD:  "San Diego Padres", SEA: "Seattle Mariners",
+      SF:  "San Francisco Giants",  STL: "St. Louis Cardinals",
+      TB:  "Tampa Bay Rays",        TEX: "Texas Rangers",   TOR: "Toronto Blue Jays",
+      WSH: "Washington Nationals",
+    };
+    function abbrevToOrg(abbrev: string): string | null {
+      return ABBREV_TO_ORG[String(abbrev ?? "").trim().toUpperCase()] ?? null;
+    }
+
+    // Safe numeric parse.
+    function toNumN(v: unknown): number | null {
+      if (v === null || v === undefined || v === "") return null;
+      const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[$,%]/g, ""));
+      return isNaN(n) ? null : n;
+    }
+
+    // Excel serial date OR ISO string → ISO date string or null.
+    function toDateISO(v: unknown): string | null {
+      if (v === null || v === undefined || v === "") return null;
+      if (typeof v === "string") {
+        const s = v.trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        return null;
+      }
+      const n = Number(v);
+      if (isNaN(n) || n < 1) return null;
+      return new Date((n - 25569) * 86400000).toISOString().slice(0, 10);
+    }
+
+    // Round value → {round (int or null), roundLabel (string or null)}.
+    // Integers stay as draft_round; non-integer strings go to draft_round_label.
+    function parseRound(v: unknown): { round: number | null; roundLabel: string | null } {
+      if (v === null || v === undefined || v === "") return { round: null, roundLabel: null };
+      if (typeof v === "number") return { round: v, roundLabel: null };
+      const s = String(v).trim();
+      const n = parseInt(s, 10);
+      if (!isNaN(n) && String(n) === s) return { round: n, roundLabel: null };
+      return { round: null, roundLabel: s || null };
+    }
+
+    // "6' 3\"" → height in inches.
+    function parseHeightIn(s: unknown): number | null {
+      if (!s) return null;
+      const m = String(s).match(/(\d+)'\s*(\d+)/);
+      if (!m) return null;
+      return parseInt(m[1]) * 12 + parseInt(m[2]);
+    }
+
+    // "R/R" → {bats:"R", throws:"R"}
+    function parseBT(bt: unknown): { bats: string | null; throws: string | null } {
+      if (!bt) return { bats: null, throws: null };
+      const parts = String(bt).split("/");
+      return { bats: parts[0]?.trim() || null, throws: parts[1]?.trim() || null };
+    }
+    // ── END SHARED HELPERS ─────────────────────────────────────────────────────
+
+    // ── JOB #8 COMMIT PATH: 2026 Draft Outcomes & Undrafted Population ─────────
+    // Detected by presence of "Drafted 2026" sheet.
+    // Writes:
+    //   • 613 draft_players rows (Drafted 2026) + slot_values
+    //   • 1,724 draft_players rows (Undrafted 2026, some with embedded NDFA data)
+    //   • N draft_players rows (NDFA Signings 2026 — unmatched only; matched ones
+    //     are already represented by their Undrafted row)
+    //   • UPDATE club_draft_spend_history for 2026 (fills total_draft_spend gap,
+    //     sets over_under_pool, selections_count, signings_count)
+    if (wb.SheetNames.includes("Drafted 2026")) {
+      await client.query("BEGIN");
+
+      // Helper: read sheet as row array (no skip — these sheets have R1 = header).
+      function sheetRowsR1(name: string): (string|number|boolean|null)[][] {
+        const ws = wb.Sheets[name];
+        if (!ws) return [];
+        return XLSX.utils.sheet_to_json<(string|number|boolean|null)[]>(ws, { header: 1, defval: null });
+      }
+
+      let dpInserted = 0, svInserted = 0, poolUpdated = 0;
+
+      // ── 1. Club Pools 2026 → UPDATE 2026 canonical club_draft_spend_history ──
+      // Fills total_draft_spend (Dollars Committed), over_under_pool, selections_count,
+      // signings_count for each club's 2026 canonical record.
+      {
+        const rows = sheetRowsR1("Club Pools 2026");
+        for (let ri = 1; ri < rows.length; ri++) {  // ri=0 is header
+          const row = rows[ri];
+          const abbrev = String(row[0] ?? "").trim();
+          if (!abbrev) continue;
+          const fullOrg = abbrevToOrg(abbrev);
+          if (!fullOrg) continue;
+
+          const selections      = toNumN(row[1]);
+          const signings        = toNumN(row[2]);
+          const slotTotal       = toNumN(row[3]);   // = pool_allotment
+          const dollarsCommitted = toNumN(row[4]);  // actual spend → total_draft_spend
+          const overageAmt      = toNumN(row[5]);   // over_under_pool
+
+          await client.query(
+            `UPDATE club_draft_spend_history
+               SET total_draft_spend = $1,
+                   pool_allotment    = COALESCE(pool_allotment, $2),
+                   over_under_pool   = $3,
+                   selections_count  = $4,
+                   signings_count    = $5
+             WHERE mlb_org = $6 AND draft_year = 2026 AND is_fixture = FALSE`,
+            [dollarsCommitted, slotTotal, overageAmt, selections, signings, fullOrg]
+          );
+          poolUpdated++;
+
+          // Add source assertion corroborating pool_allotment (slot total)
+          if (slotTotal !== null) {
+            const existRec = await client.query<{id:number}>(
+              `SELECT id FROM club_draft_spend_history
+                WHERE mlb_org=$1 AND draft_year=2026 AND is_fixture=FALSE LIMIT 1`,
+              [fullOrg]
+            );
+            if (existRec.rows.length > 0) {
+              await client.query(
+                `INSERT INTO record_source_assertions
+                   (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                    worksheet, excel_row, excel_column, source_preamble, asserted_value)
+                 VALUES ('club_draft_spend_history',$1,$2,$3,$4,$5,$6,$7,$8)`,
+                [existRec.rows[0].id, sfvId, jobId, "Club Pools 2026", ri + 1, "Slot Total of Spend",
+                 "DiamondIQ 2026 Draft Outcomes Dataset", String(slotTotal)]
+              );
+            }
+          }
+        }
+      }
+
+      // ── 2. Drafted 2026 → draft_players + slot_values ────────────────────────
+      {
+        const rows = sheetRowsR1("Drafted 2026");
+        const preamble = "DiamondIQ 2026 Draft Outcomes Dataset | 2026 Draft Signings 07272026 FINAL (1).xlsx";
+
+        for (let ri = 1; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const outcomeGroup = String(row[0] ?? "").trim();
+          if (!outcomeGroup) continue;
+
+          const { round, roundLabel } = parseRound(row[1]);
+          const overallPick  = toNumN(row[2])  !== null ? Math.round(toNumN(row[2])!) : null;
+          const mlbRank      = toNumN(row[3])  !== null ? Math.round(toNumN(row[3])!) : null;
+          const clubAbbrev   = String(row[4] ?? "").trim();
+          const fullOrg      = abbrevToOrg(clubAbbrev);
+          const mlbamId      = toNumN(row[5])  !== null ? Math.round(toNumN(row[5])!) : null;
+          const playerName   = String(row[6] ?? "").trim() || null;
+          const playerClass  = String(row[7] ?? "").trim() || null;
+          const position     = String(row[8] ?? "").trim() || null;
+          const school       = String(row[9] ?? "").trim() || null;
+          const slotVal      = toNumN(row[10]);
+          const signDate     = toDateISO(row[11]);
+          const signBonus    = toNumN(row[12]);
+          const statusStr    = String(row[13] ?? "").trim().toLowerCase();
+          const isSigned     = statusStr === "signed" || signBonus !== null;
+          // row[16] = Source Row (original source file row) — used as source_row provenance
+          const srcRow       = toNumN(row[16]) !== null ? Math.round(toNumN(row[16])!) : (ri + 1);
+
+          if (!playerName) continue;
+
+          // School type inference from player_class: HS → high school
+          const schoolType = playerClass === "HS" ? "HS" : (playerClass ? "College" : null);
+
+          const dpResult = await client.query<{id:number}>(
+            `INSERT INTO draft_players
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_preamble,
+                player_name, draft_year, draft_round, draft_round_label,
+                draft_pick_overall, mlb_org, position, school, school_type,
+                player_class, outcome_group, mlbam_player_id, mlb_rank,
+                bonus_slot_value, bonus_reported, signed, signing_date,
+                evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,2026,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
+                     'verified_public','unverified',FALSE)
+             RETURNING id`,
+            [
+              datasetId, sfvId, jobId,
+              srcRow, "Drafted 2026", preamble,
+              playerName, round, roundLabel,
+              overallPick, fullOrg, position, school, schoolType,
+              playerClass, outcomeGroup, mlbamId, mlbRank,
+              slotVal, signBonus, isSigned, signDate,
+            ]
+          );
+          dpInserted++;
+
+          // Insert slot_values record for picks with a slot value
+          if (slotVal !== null && overallPick !== null) {
+            await client.query(
+              `INSERT INTO slot_values
+                 (dataset_id, source_file_version_id, ingestion_job_id,
+                  source_row, source_worksheet, draft_year, pick_overall,
+                  slot_value_usd, pool_eligible, evidence_class,
+                  verification_status, is_fixture)
+               VALUES ($1,$2,$3,$4,$5,2026,$6,$7,TRUE,'verified_public','unverified',FALSE)`,
+              [datasetId, sfvId, jobId, srcRow, "Drafted 2026", overallPick, slotVal]
+            );
+            svInserted++;
+          }
+        }
+      }
+
+      // ── 3. Undrafted 2026 → draft_players ────────────────────────────────────
+      {
+        const rows = sheetRowsR1("Undrafted 2026");
+        const preamble = "DiamondIQ 2026 Draft Outcomes Dataset | Undrafted_2026_MLB_Draftees.xlsx";
+
+        for (let ri = 1; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const outcomeGroup = String(row[0] ?? "").trim();
+          if (!outcomeGroup) continue;
+
+          const playerName  = String(row[1] ?? "").trim() || null;
+          const school      = String(row[2] ?? "").trim() || null;
+          const birthplace  = String(row[3] ?? "").trim() || null;
+          const position    = String(row[4] ?? "").trim() || null;
+          const { bats, throws: throwsVal } = parseBT(row[5]);
+          const playerClass = String(row[6] ?? "").trim() || null;
+          const heightInch  = parseHeightIn(row[7]);
+          const weight      = toNumN(row[8]) !== null ? Math.round(toNumN(row[8])!) : null;
+          const dobStr      = String(row[9] ?? "").trim();
+          const dob         = /^\d{4}-\d{2}-\d{2}/.test(dobStr) ? dobStr.slice(0, 10) : null;
+
+          // NDFA match columns (if this undrafted player signed as NDFA)
+          const ndfa_match_status = String(row[15] ?? "").trim() || null;  // col 15 = Match Method
+          const ndfa_club_abbrev  = String(row[11] ?? "").trim() || null;
+          const ndfa_club         = ndfa_club_abbrev ? abbrevToOrg(ndfa_club_abbrev) : null;
+          const ndfa_mlbam_id     = toNumN(row[12]) !== null ? Math.round(toNumN(row[12])!) : null;
+          const ndfa_sign_bonus   = toNumN(row[13]);
+          const ndfa_sign_date    = toDateISO(row[14]);
+
+          // If exactly matched to NDFA signing, update outcome_group to 'Undrafted / NDFA'
+          const finalOutcomeGroup = (ndfa_match_status === "Exact normalized name match")
+            ? "Undrafted / NDFA" : "Undrafted";
+
+          const srcRow = toNumN(row[18]) !== null ? Math.round(toNumN(row[18])!) : (ri + 1);
+
+          if (!playerName) continue;
+
+          const schoolType = (playerClass === "HS" || String(playerClass ?? "").startsWith("HS"))
+            ? "HS" : (playerClass ? "College" : null);
+
+          await client.query(
+            `INSERT INTO draft_players
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_preamble,
+                player_name, draft_year, mlb_org, position, school, school_type,
+                bats, throws, height_in, weight_lbs, player_class,
+                outcome_group, birthplace, dob,
+                mlbam_player_id, ndfa_match_status,
+                bonus_reported, signing_date, signed,
+                evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,2026,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,
+                     'verified_public','unverified',FALSE)`,
+            [
+              datasetId, sfvId, jobId,
+              srcRow, "Undrafted 2026", preamble,
+              playerName,
+              ndfa_club ?? null,  // mlb_org = NDFA club if matched, else null
+              position, school, schoolType,
+              bats, throwsVal, heightInch, weight, playerClass,
+              finalOutcomeGroup, birthplace, dob,
+              ndfa_mlbam_id, ndfa_match_status,
+              ndfa_sign_bonus, ndfa_sign_date,
+              ndfa_sign_bonus !== null, // signed = true if NDFA bonus present
+            ]
+          );
+          dpInserted++;
+        }
+      }
+
+      // ── 4. NDFA Signings 2026 → draft_players (unmatched only) ───────────────
+      // Exact-match NDFAs are already represented in Undrafted rows (step 3).
+      // Only insert players whose Undrafted List Match Status = "No exact-name match".
+      {
+        const rows = sheetRowsR1("NDFA Signings 2026");
+        const preamble = "DiamondIQ 2026 Draft Outcomes Dataset | 2026 Draft Signings 07272026 FINAL (1).xlsx | Passed-Over Players";
+
+        for (let ri = 1; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const outcomeGroup    = String(row[0] ?? "").trim();
+          if (!outcomeGroup) continue;
+
+          const matchStatus = String(row[9] ?? "").trim();
+          // Skip if exact match — already in Undrafted row
+          if (matchStatus === "Exact normalized name match") continue;
+
+          const clubAbbrev  = String(row[1] ?? "").trim();
+          const fullOrg     = abbrevToOrg(clubAbbrev);
+          const mlbamId     = toNumN(row[2]) !== null ? Math.round(toNumN(row[2])!) : null;
+          const playerName  = String(row[3] ?? "").trim() || null;
+          const playerClass = String(row[4] ?? "").trim() || null;
+          const position    = String(row[5] ?? "").trim() || null;
+          const school      = String(row[6] ?? "").trim() || null;
+          const signBonus   = toNumN(row[7]);
+          const signDate    = toDateISO(row[8]);
+          const ndfa_status = matchStatus || null;
+          const srcRow      = toNumN(row[13]) !== null ? Math.round(toNumN(row[13])!) : (ri + 1);
+
+          if (!playerName) continue;
+
+          const schoolType = playerClass === "HS" ? "HS" : (playerClass ? "College" : null);
+
+          await client.query(
+            `INSERT INTO draft_players
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_preamble,
+                player_name, draft_year, mlb_org, position, school, school_type,
+                player_class, outcome_group, mlbam_player_id, ndfa_match_status,
+                bonus_reported, signing_date, signed,
+                evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,2026,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,TRUE,
+                     'verified_public','unverified',FALSE)`,
+            [
+              datasetId, sfvId, jobId,
+              srcRow, "NDFA Signings 2026", preamble,
+              playerName, fullOrg, position, school, schoolType,
+              playerClass, "Undrafted / NDFA", mlbamId, ndfa_status,
+              signBonus, signDate,
+            ]
+          );
+          dpInserted++;
+        }
+      }
+
+      // ── Finalize Job #8 ───────────────────────────────────────────────────────
+      await client.query(
+        `UPDATE ingestion_jobs
+           SET status='complete', completed_at=NOW(), rows_imported=$1
+         WHERE id=$2`,
+        [dpInserted + svInserted + poolUpdated, jobId]
+      );
+      await client.query(
+        `UPDATE data_library SET processing_status='ready', last_import_at=NOW() WHERE id=$1`,
+        [datasetId]
+      );
+      await client.query("COMMIT");
+
+      return res.json({
+        ok: true,
+        data: {
+          jobId,
+          status: "complete",
+          mode: "draft_outcomes_2026",
+          draftPlayerRecordsInserted: dpInserted,
+          slotValueRecordsInserted: svInserted,
+          clubPool2026RecordsUpdated: poolUpdated,
+          breakdown: {
+            drafted2026: "613 picks (Rounds 1-20 + specials)",
+            undrafted2026: "1,724 undrafted players (some with embedded NDFA match data)",
+            ndfa2026Unmatched: "unmatched NDFA signings (no undrafted list link)",
+          },
+        },
+      });
+    }
+    // ── END JOB #8 COMMIT PATH ────────────────────────────────────────────────
+
+    // ── JOB #5 COMMIT PATH: 2025 Rule 4 Draft Signings ────────────────────────
+    // Detected by presence of "Rds. 1-20" sheet.
+    // Writes:
+    //   • Source assertions for existing 2025 club_draft_spend_history canonical
+    //     records (Pools sheet corroborates slot-total values from Job #3)
+    //   • Updates new pool-detail columns: pool_allotment, over_under_pool,
+    //     selections_count, signings_count, dollars_committed
+    //   • 615 draft_players rows (Rds. 1-20) + slot_values records
+    //   • 131 draft_players rows (Passed-Over Players = 2025 NDFAs)
+    if (wb.SheetNames.includes("Rds. 1-20")) {
+      await client.query("BEGIN");
+
+      const preambleJ5 = "2025 RULE 4 DRAFT SIGNINGS | 707 Total Signings As of 07/28/2025";
+      const preamblePools = "2025 RULE 4 DRAFT SIGNINGS | Pools";
+
+      // ── Load existing 2025 spend canonical IDs for source assertions ──────────
+      const spend2025Rows = await client.query<{id:number; mlb_org:string}>(
+        `SELECT id, mlb_org FROM club_draft_spend_history WHERE draft_year=2025 AND is_fixture=FALSE`
+      );
+      const spend2025Map = new Map<string, number>();
+      for (const r of spend2025Rows.rows) spend2025Map.set(r.mlb_org, r.id);
+
+      let dpInserted5 = 0, svInserted5 = 0, rsaCount5 = 0, poolUpdated5 = 0;
+
+      // ── Pools sheet → source assertions + UPDATE new pool columns ─────────────
+      // Header at R4 (array index 3). Data at R5+ (array index 4).
+      {
+        const rows = sheetRows("Pools");
+        for (let ri = 4; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const abbrev = String(row[1] ?? "").trim();
+          if (!abbrev) continue;
+          const fullOrg = abbrevToOrg(abbrev);
+          if (!fullOrg) continue;
+
+          const selections        = toNumN(row[2]) !== null ? Math.round(toNumN(row[2])!) : null;
+          const signings          = toNumN(row[3]) !== null ? Math.round(toNumN(row[3])!) : null;
+          const slotTotal         = toNumN(row[4]);   // col E = Slot Total of Spend
+          const dollarsCommitted  = toNumN(row[5]);   // col F = Dollars Committed (actual bonus total)
+          const overageAmt        = toNumN(row[6]);   // col G = Overage ($)
+
+          // Source assertion: Slot Total corroborates existing total_draft_spend
+          const canonId = spend2025Map.get(fullOrg);
+          if (canonId && slotTotal !== null) {
+            await client.query(
+              `INSERT INTO record_source_assertions
+                 (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                  worksheet, excel_row, excel_column, source_preamble, asserted_value)
+               VALUES ('club_draft_spend_history',$1,$2,$3,$4,$5,$6,$7,$8)`,
+              [canonId, sfvId, jobId, "Pools", ri + 1, "Slot Total of Spend", preamblePools, String(slotTotal)]
+            );
+            rsaCount5++;
+          }
+
+          // UPDATE canonical record with new pool-detail columns
+          await client.query(
+            `UPDATE club_draft_spend_history
+               SET pool_allotment   = COALESCE(pool_allotment, $1),
+                   over_under_pool  = COALESCE(over_under_pool, $2),
+                   selections_count = $3,
+                   signings_count   = $4,
+                   dollars_committed = COALESCE(dollars_committed, $5)
+             WHERE mlb_org=$6 AND draft_year=2025 AND is_fixture=FALSE`,
+            [slotTotal, overageAmt, selections, signings, dollarsCommitted, fullOrg]
+          );
+          poolUpdated5++;
+        }
+      }
+
+      // ── Rds. 1-20 sheet → draft_players + slot_values ─────────────────────────
+      // Header at R4 (index 3). Data at R5+ (index 4).
+      // Cols: 0=null, 1=Round, 2=Selection(overall), 3=Club, 4=Player, 5=Class,
+      //       6=POS, 7=School, 8=SlotValue, 9=SignDate, 10=SigningBonus, 11-23=unused
+      {
+        const rows = sheetRows("Rds. 1-20");
+        for (let ri = 4; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const { round, roundLabel } = parseRound(row[1]);
+          const overallPick  = toNumN(row[2]) !== null ? Math.round(toNumN(row[2])!) : null;
+          const clubAbbrev   = String(row[3] ?? "").trim();
+          const fullOrg      = abbrevToOrg(clubAbbrev);
+          const playerName   = String(row[4] ?? "").trim() || null;
+          const playerClass  = String(row[5] ?? "").trim() || null;
+          const position     = String(row[6] ?? "").trim() || null;
+          const school       = String(row[7] ?? "").trim() || null;
+          const slotVal      = toNumN(row[8]);
+          const signDate     = toDateISO(row[9]);
+          const signBonus    = toNumN(row[10]);
+
+          if (!playerName) continue;
+
+          const schoolType = playerClass === "HS" ? "HS" : (playerClass ? "College" : null);
+          const isSigned   = signBonus !== null || signDate !== null;
+
+          const dpResult = await client.query<{id:number}>(
+            `INSERT INTO draft_players
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_preamble,
+                player_name, draft_year, draft_round, draft_round_label,
+                draft_pick_overall, mlb_org, position, school, school_type,
+                player_class, outcome_group,
+                bonus_slot_value, bonus_reported, signed, signing_date,
+                evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,2025,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+                     'verified_public','unverified',FALSE)
+             RETURNING id`,
+            [
+              datasetId, sfvId, jobId,
+              ri + 1, "Rds. 1-20", preambleJ5,
+              playerName, round, roundLabel,
+              overallPick, fullOrg, position, school, schoolType,
+              playerClass, "Drafted",
+              slotVal, signBonus, isSigned, signDate,
+            ]
+          );
+          dpInserted5++;
+
+          // slot_values: only where slot value and overall pick are present
+          if (slotVal !== null && overallPick !== null) {
+            await client.query(
+              `INSERT INTO slot_values
+                 (dataset_id, source_file_version_id, ingestion_job_id,
+                  source_row, source_worksheet, draft_year, pick_overall,
+                  slot_value_usd, pool_eligible, evidence_class,
+                  verification_status, is_fixture)
+               VALUES ($1,$2,$3,$4,$5,2025,$6,$7,TRUE,'verified_public','unverified',FALSE)`,
+              [datasetId, sfvId, jobId, ri + 1, "Rds. 1-20", overallPick, slotVal]
+            );
+            svInserted5++;
+          }
+        }
+      }
+
+      // ── Passed-Over Players sheet → draft_players (2025 NDFAs) ────────────────
+      // Header at R4 (index 3). Data at R5+ (index 4).
+      // Cols: 0=null, 1="Passed", 2="Over", 3=Club, 4=Player, 5=Class,
+      //       6=Position, 7=School, 8=SigningBonus, 9=SignDate,
+      //       10=null, 11=mystery numeric (skip), 12-13=null
+      {
+        const rows = sheetRows("Passed-Over Players");
+        const preamblePO = "2025 NON-DRAFTED FREE AGENTS | 131 Total Passed-Over Signings As Of: 07/28/2025";
+
+        for (let ri = 4; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const clubAbbrev  = String(row[3] ?? "").trim();
+          const fullOrg     = abbrevToOrg(clubAbbrev);
+          const playerName  = String(row[4] ?? "").trim() || null;
+          const playerClass = String(row[5] ?? "").trim() || null;
+          const position    = String(row[6] ?? "").trim() || null;
+          const school      = String(row[7] ?? "").trim() || null;
+          const signBonus   = toNumN(row[8]);
+          const signDate    = toDateISO(row[9]);
+          // row[11] = mystery numeric column — intentionally skipped (not mappable)
+
+          if (!playerName) continue;
+
+          const schoolType = playerClass === "HS" ? "HS" : (playerClass ? "College" : null);
+
+          await client.query(
+            `INSERT INTO draft_players
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_preamble,
+                player_name, draft_year, mlb_org, position, school, school_type,
+                player_class, outcome_group,
+                bonus_reported, signed, signing_date,
+                evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,2025,$8,$9,$10,$11,$12,$13,$14,TRUE,$15,
+                     'verified_public','unverified',FALSE)`,
+            [
+              datasetId, sfvId, jobId,
+              ri + 1, "Passed-Over Players", preamblePO,
+              playerName, fullOrg, position, school, schoolType,
+              playerClass, "Undrafted / NDFA",
+              signBonus, signDate,
+            ]
+          );
+          dpInserted5++;
+        }
+      }
+
+      // ── Finalize Job #5 ───────────────────────────────────────────────────────
+      await client.query(
+        `UPDATE ingestion_jobs
+           SET status='complete', completed_at=NOW(), rows_imported=$1
+         WHERE id=$2`,
+        [dpInserted5 + svInserted5 + rsaCount5 + poolUpdated5, jobId]
+      );
+      await client.query(
+        `UPDATE data_library SET processing_status='ready', last_import_at=NOW() WHERE id=$1`,
+        [datasetId]
+      );
+      await client.query("COMMIT");
+
+      return res.json({
+        ok: true,
+        data: {
+          jobId,
+          status: "complete",
+          mode: "draft_signings_2025",
+          draftPlayerRecordsInserted: dpInserted5,
+          slotValueRecordsInserted: svInserted5,
+          poolUpdateSourceAssertions: rsaCount5,
+          clubPool2025RecordsUpdated: poolUpdated5,
+          breakdown: {
+            rds120: "rounds 1-20 selections with slot values and signing bonuses",
+            passedOver: "2025 non-drafted free agent signings",
+          },
+        },
+      });
+    }
+    // ── END JOB #5 COMMIT PATH ────────────────────────────────────────────────
+
     // Get preamble text (rows 0-1 = Excel rows 1-2)
     function getPreamble(name: string): string {
       const rows = sheetRows(name);
