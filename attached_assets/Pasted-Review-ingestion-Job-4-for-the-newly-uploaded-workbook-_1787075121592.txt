@@ -1,0 +1,53 @@
+Review ingestion Job #4 for the newly uploaded workbook, "2021-2025 Club Spending Draft Analysis.xlsx."
+
+The file has already been uploaded and parsed. Do NOT commit anything yet and do NOT redesign or expand the ingestion architecture.
+
+Using the existing four-layer evidence architecture and the ingestion rules already built and verified for Job #3, perform a complete pre-commit dry-run review of Job #4.
+
+Report:
+
+1. Every worksheet detected:
+   - worksheet name
+   - detected classification
+   - header row
+   - data-row count
+   - column count
+   - whether it should be imported or skipped
+
+2. For every imported worksheet, show the detected column mappings:
+   - original column header
+   - evidence layer (L1 factual, L2 derived, L3 OSM finding, L4 DiamondIQ inference)
+   - evidence class
+   - proposed canonical field / destination table
+   - whether the column will be imported or skipped
+
+3. Identify any data already present in the production database from Job #3.
+   For overlapping facts or metrics:
+   - do not create duplicate canonical records
+   - compare the values
+   - report whether they agree or conflict
+   - preserve this workbook as an additional source assertion when values agree
+
+4. Identify:
+   - unmapped fields
+   - ambiguous classifications
+   - formulas/calculated fields
+   - OSM proprietary research/findings
+   - projections/inferences
+   - league totals, section headers, notes, methodology rows, or other non-record rows
+   - any fields requiring a new canonical destination
+
+5. Produce the expected post-deduplication commit counts by:
+   - L1 factual records
+   - L2 derived metrics
+   - L3 OSM findings
+   - L4 DiamondIQ inferences
+   - additional source assertions
+   - duplicates/overlaps with Job #3
+   - conflicts with Job #3
+
+6. List ONLY the mapping corrections or decisions that actually require OSM approval before commit.
+
+Do not make architecture changes simply because this workbook is structured differently. Use the existing ingestion framework wherever possible.
+
+STOP after the dry-run review. Do not commit Job #4 until I explicitly approve it.
