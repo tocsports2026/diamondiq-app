@@ -1,0 +1,266 @@
+The proposal is close, but I am NOT approving Stage 5 yet.
+
+Before implementation, make these final architectural corrections so the database will scale across all 4 Excel workbooks and 21 annotated research articles.
+
+DO NOT COMMIT PRODUCTION DATA.
+
+1. KEEP CANONICAL FACT TABLES CLEAN
+
+Do not place every calculated aggregate, time-window result, OSM interpretation, or model output directly onto the same canonical annual factual row.
+
+For example, avoid making club_payroll_history permanently contain fields such as:
+
+avg_5yr_payroll
+cagr_5yr_payroll
+times_over_cbt
+payroll_tier
+osm_payroll_read
+
+when those values may represent:
+- different calculation windows
+- different source versions
+- different methodologies
+- different dates
+- different OSM models
+
+Likewise, do not turn club_draft_spend_history into a catch-all table for every historical calculation and OSM interpretation.
+
+Canonical historical tables should primarily contain atomic factual records such as:
+
+club_payroll_history:
+- mlb_org
+- season
+- payroll value/type
+- factual provenance
+- verification status
+
+club_draft_spend_history:
+- mlb_org
+- draft_year
+- official pool allotment
+- factual spend value where applicable
+- first-round pick where appropriate
+- factual provenance
+- verification status
+
+2. CREATE A FLEXIBLE DERIVED-METRICS LAYER
+
+Create/propose a normalized table for calculated results.
+
+Example concept:
+
+derived_metrics
+
+It should be capable of storing:
+
+- entity_type
+- entity_id / entity_key
+- metric_name
+- numeric_value
+- text_value
+- period_start
+- period_end
+- evidence_class
+- methodology_id or methodology/version
+- source_file_version_id
+- ingestion_job_id
+- verification_status
+- calculated_at
+- calculated_by
+
+Examples from this workbook:
+
+5-Yr Avg CBT Payroll
+5-Yr CAGR
+Times Over CBT Threshold
+5-Yr Avg Draft Pool
+2026 Pool vs 5-Yr Avg
+CBT Payroll Tier, if methodology determines it is calculated
+Draft Pool Tier
+other future calculations
+
+Use record_derivations to connect each derived metric to the factual source records used to produce it.
+
+This must allow DiamondIQ to store multiple versions/time windows of the same metric without overwriting history.
+
+3. CREATE A SEPARATE OSM RESEARCH / ANALYSIS LAYER
+
+OSM-authored observations should not be forced into factual history rows.
+
+Create/propose a flexible structure such as:
+
+osm_research_findings
+
+capable of storing:
+
+- subject/entity
+- finding_type
+- finding_text
+- structured value where appropriate
+- period/context
+- methodology/version if applicable
+- source_file_version_id
+- worksheet/article source
+- OSM author/reviewer where available
+- verification/review status
+- created/imported date
+- provenance
+
+Examples:
+
+Pattern / Read
+Payroll ↔ Draft Pool Correlation Direction
+OSM Notes
+scouting/research observations
+club behavioral reads
+research conclusions
+
+These are valuable DiamondIQ research assets and must be preserved, but they are not equivalent to verified public facts.
+
+4. DIAMONDIQ INFERENCE STORAGE
+
+Create/propose a separate analytical/inference record structure for system-generated projections and interpretations.
+
+Examples from this workbook:
+
+Projected 2026 TOTAL Draft Spend
+Projected $ Above Pool
+Projection Confidence
+
+Each inference must preserve:
+
+- inference type
+- value/text
+- model/methodology version
+- generated date
+- evidence records used
+- OSM review status
+- provenance/derivation chain
+
+Never store DiamondIQ inference as verified factual evidence.
+
+5. FIX ARTICLE + OSM NOTES CLASSIFICATION
+
+The proposed osm_research_articles table currently has one evidence_class for the entire record.
+
+That is insufficient because:
+
+THE ARTICLE ITSELF
+may be Verified Public Information
+
+while
+
+OSM NOTES ON THAT ARTICLE
+are OSM Proprietary Data / Analysis.
+
+These must remain separately classifiable.
+
+Design the article ingestion layer so it preserves at minimum:
+
+ARTICLE SOURCE RECORD:
+- title
+- publisher
+- source URL
+- publication date
+- article content/excerpt as permitted
+- source provenance
+- verification status
+- evidence class
+
+SEPARATE OSM ANNOTATION/NOTES RECORD:
+- linked article/source ID
+- OSM note
+- author/reviewer where available
+- topics/entities
+- evidence class = OSM Proprietary
+- created/imported date
+- provenance
+
+Do not assign one evidence class to both the public article and OSM's proprietary notes.
+
+6. METHODOLOGY MUST BE FIRST-CLASS DATA
+
+Calculated metrics and classifications need methodology/version provenance.
+
+For example:
+- 5-year average
+- CAGR
+- payroll tier
+- pool tier
+- assumed spend rate
+- projection model
+- evidence-strength thresholds
+
+DiamondIQ must know HOW a value was produced, not merely that it was "calculated."
+
+Extend methodology_rules or propose an appropriate methodology/version table that calculated and inference records can reference.
+
+7. CLASSIFICATION VERSUS CALCULATION
+
+Do not assume every tier/classification is mathematically calculated.
+
+For fields such as:
+
+CBT Payroll Tier
+Draft Pool Tier
+Projection Confidence
+
+determine whether each is:
+- deterministic calculation,
+- OSM-defined methodology/classification,
+- OSM proprietary judgment,
+- or DiamondIQ inference.
+
+The storage architecture must support all four possibilities.
+
+8. REPORT CITATION / PROVENANCE CHAIN
+
+The final provenance chain should support:
+
+ATHLETE REPORT CLAIM
+→ report_citation
+→ factual record / derived metric / OSM finding / DiamondIQ inference
+→ record_derivations where applicable
+→ underlying factual source record(s)
+→ source file version
+→ original workbook/article
+→ worksheet + Excel row/column where applicable
+→ original source/provider
+
+This audit chain is mandatory.
+
+9. DATA-FIRST RETRIEVAL ORDER
+
+Retain the proposed data-first behavior, but refine it to:
+
+A. Verified factual records
+B. Relevant OSM proprietary research/findings
+C. Derived/calculated metrics with methodology + derivation
+D. DiamondIQ inference only when appropriate
+E. DATA GAP / Intelligence Request when required evidence is missing
+
+AI/model knowledge must never silently supply missing factual baseball intelligence.
+
+10. CURRENT WORKBOOK MAPPING
+
+After proposing the revised schema, remap Job #3 conceptually into:
+
+- canonical factual records
+- derived metrics
+- OSM research findings
+- DiamondIQ inference records
+- documentation/source metadata
+- skipped presentation-only data
+
+Show examples using actual fields from Job #3.
+
+11. CONFIRM SAFETY STATE
+
+Confirm again:
+- Stage 5 remains unbuilt
+- Job #3 remains preview only
+- zero production records have been committed
+
+STOP after presenting the revised architecture.
+
+Do not implement these schema changes and do not build Stage 5 until I explicitly approve.
