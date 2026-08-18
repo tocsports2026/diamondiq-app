@@ -1,0 +1,107 @@
+APPROVED.
+
+Implement the revised DiamondIQ four-layer data architecture exactly as proposed.
+
+You are authorized to implement the SCHEMA AND INGESTION ARCHITECTURE, but this approval is NOT permission to commit Job #3 production data yet.
+
+Implement:
+
+LAYER 1 — Canonical Factual Records
+- Clean atomic factual tables
+- club_payroll_history
+- club_draft_spend_history
+- draft_players
+- slot_values
+- uniform provenance fields
+- verification status
+- conflict handling
+- fixture isolation
+
+LAYER 2 — Derived Metrics
+- derived_metrics
+- methodology/version references
+- time-window support
+- multiple versions without overwriting historical results
+
+LAYER 3 — OSM Research / Analysis
+- osm_research_findings
+- preserve OSM-authored observations, classifications, assumptions, research notes, and interpretations separately from verified public facts
+
+LAYER 4 — DiamondIQ Inference
+- diamondiq_inferences
+- methodology/model version
+- confidence
+- derivation links
+- mandatory OSM review state
+- never treated as factual evidence
+
+SUPPORTING INFRASTRUCTURE
+- methodology_versions
+- record_derivations
+- report_citations capable of citing all four layers
+- osm_articles
+- osm_article_annotations
+- immutable source_file_versions
+- ingestion provenance
+
+ARTICLE ARCHITECTURE
+Preserve the approved separation between:
+1. the underlying public article/source record, and
+2. OSM's proprietary annotations/notes.
+
+Do not combine their evidence classifications.
+
+DATA-FIRST RULE
+Preserve the approved retrieval hierarchy:
+
+A. Verified factual records
+B. OSM proprietary research/findings
+C. Derived/calculated metrics with methodology and derivation
+D. DiamondIQ inference only when appropriate and explicitly labelled
+E. DATA GAP / Intelligence Request when required evidence is unavailable
+
+Never silently substitute AI/model knowledge for missing factual DiamondIQ data.
+
+PROVENANCE
+Preserve the full audit chain:
+
+Report claim
+→ report citation
+→ factual / derived / OSM / inference record
+→ derivation where applicable
+→ underlying factual records
+→ source file version
+→ ingestion job
+→ worksheet/article
+→ original Excel row/column where applicable
+→ original source/provider
+
+JOB #3
+Preserve the conceptual mapping you proposed for Job #3.
+
+However:
+
+DO NOT COMMIT JOB #3 YET.
+
+After implementing the schema and ingestion architecture:
+
+1. Run migrations.
+2. Verify all new tables/constraints/indexes.
+3. Verify existing DEV fixture isolation remains intact.
+4. Reparse/revalidate Job #3 against the new architecture.
+5. Show me the FINAL proposed Job #3 commit preview, including:
+   - number of Layer 1 factual records to be created
+   - number of Layer 2 derived metric records
+   - number of Layer 3 OSM research findings
+   - number of Layer 4 inference records
+   - duplicates detected
+   - conflicts detected
+   - skipped presentation/documentation records
+   - any unmapped fields
+   - any records still requiring OSM classification/review
+6. Confirm the source/provenance links that will be created.
+7. Confirm zero Job #3 production records have been committed.
+
+STOP THERE.
+
+Do not execute the Job #3 commit and do not import the remaining OSM research files until I explicitly approve the final commit preview.

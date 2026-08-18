@@ -1,15 +1,23 @@
 /**
  * DiamondIQ — Data Ingestion Routes
  *
- * POST  /api/admin/ingestion/upload   — accept file, parse, return preview
- * GET   /api/admin/ingestion          — list ingestion jobs
- * GET   /api/admin/ingestion/:jobId   — get single job + parsed structure
- * POST  /api/admin/ingestion/:jobId/classify  — save Admin mapping decisions
- * DELETE /api/admin/ingestion/:jobId  — cancel / remove job
+ * POST  /api/admin/ingestion/upload              — accept file, parse, return preview
+ * GET   /api/admin/ingestion                     — list ingestion jobs
+ * GET   /api/admin/ingestion/:jobId              — get single job + parsed structure
+ * POST  /api/admin/ingestion/:jobId/classify     — save Admin mapping decisions
+ * POST  /api/admin/ingestion/:jobId/reparse      — re-parse stored file (no re-upload)
+ * POST  /api/admin/ingestion/:jobId/commit-preview — four-layer record count preview (no commit)
+ * DELETE /api/admin/ingestion/:jobId             — cancel / remove job
  *
  * IMPORTANT: These routes stop at the mapping/preview stage.
  * No production records are committed until Stage 5 (commit endpoint) is built
  * and explicitly approved by OSM Admin.
+ *
+ * Four-layer evidence architecture:
+ *   Layer 1 — Canonical Factual Records  (evidence: verified_public)
+ *   Layer 2 — Derived Metrics            (evidence: calculated | osm_proprietary)
+ *   Layer 3 — OSM Research Findings      (evidence: osm_proprietary)
+ *   Layer 4 — DiamondIQ Inferences       (evidence: diamondiq_inference)
  */
 
 import { Router, Request } from "express";
@@ -393,11 +401,35 @@ interface ParsedWorksheet {
   isEmpty: boolean;
 }
 
+// ── Layer mapping ─────────────────────────────────────────────────────────────
+
+/** Map an evidence label string to a numeric layer (1–4) and a target table. */
+function detectLayer(evidenceLabel: string): {
+  layer: 1 | 2 | 3 | 4;
+  layerName: "factual" | "derived" | "osm_finding" | "inference";
+} {
+  switch (evidenceLabel) {
+    case "Verified Public Information":
+      return { layer: 1, layerName: "factual" };
+    case "Calculated Results":
+      return { layer: 2, layerName: "derived" };
+    case "OSM Proprietary Data":
+    case "OSM-Provided Athlete Information":
+      return { layer: 3, layerName: "osm_finding" };
+    case "DiamondIQ Analysis / Inference":
+      return { layer: 4, layerName: "inference" };
+    default:
+      return { layer: 1, layerName: "factual" };
+  }
+}
+
 interface ParsedColumn {
   index: number;
   header: string;
   detectedEvidenceLabel: string;
-  defaultSkip: boolean;   // true when evidence is "DiamondIQ Analysis / Inference"
+  defaultSkip: boolean;       // true when evidence is "DiamondIQ Analysis / Inference"
+  suggestedLayer: 1 | 2 | 3 | 4;
+  suggestedLayerName: "factual" | "derived" | "osm_finding" | "inference";
   suggestedCanonicalField: string | null;
   suggestedTable: string | null;
   sampleValues: (string | number | boolean | null)[];
@@ -515,11 +547,14 @@ function parseWorkbook(filePath: string, fileExt: string): {
       const allNull = sampleValues.every((v) => v === null || v === "");
       const suggestion = suggestCanonicalField(h, sheetName);
       const evidenceLabel = detectColumnEvidenceLabel(h);
+      const { layer, layerName } = detectLayer(evidenceLabel);
       return {
         index: idx,
         header: h,
         detectedEvidenceLabel: evidenceLabel,
         defaultSkip: evidenceLabel === "DiamondIQ Analysis / Inference",
+        suggestedLayer: layer,
+        suggestedLayerName: layerName,
         suggestedCanonicalField: suggestion?.field ?? null,
         suggestedTable: suggestion?.table ?? null,
         sampleValues,
@@ -782,6 +817,327 @@ router.post("/:jobId/classify", requireAdmin, async (req, res) => {
     return res.status(500).json({ ok: false, error: "Server error." });
   }
 });
+
+// ── POST /api/admin/ingestion/:jobId/commit-preview ───────────────────────────
+// Analyses parsed_structure (+ column_map if saved) and returns a four-layer
+// record count preview.  Does NOT write any production records.
+// This is the mandatory sign-off preview before Stage 5 commit.
+
+router.post("/:jobId/commit-preview", requireAdmin, async (req, res) => {
+  try {
+    const job = await queryOne<Record<string, unknown>>(
+      `SELECT ij.id, ij.status, ij.parsed_structure, ij.column_map,
+              ij.source_file_version_id, ij.dataset_id,
+              sfv.file_hash, sfv.original_filename
+       FROM ingestion_jobs ij
+       LEFT JOIN source_file_versions sfv ON sfv.id = ij.source_file_version_id
+       WHERE ij.id = $1`,
+      [req.params.jobId]
+    );
+    if (!job) return res.status(404).json({ ok: false, error: "Job not found." });
+    if (job.status === "complete" || job.status === "cancelled") {
+      return res.status(409).json({ ok: false, error: `Cannot preview a ${job.status} job.` });
+    }
+
+    const ps = job.parsed_structure as { worksheets: ParsedWorksheet[] } | null;
+    if (!ps?.worksheets) {
+      return res.status(422).json({ ok: false, error: "No parsed structure available. Run reparse first." });
+    }
+
+    // Use saved column_map if available, else fall back to auto-detected suggestions.
+    type ColMapEntry = { header: string; canonicalField?: string; evidenceLabel?: string; skip?: boolean; layer?: number };
+    type WsMapEntry  = { name: string; skip?: boolean; classification?: string; columns?: ColMapEntry[] };
+    const columnMap  = job.column_map as { worksheets?: WsMapEntry[] } | null;
+    const mapIndex   = new Map<string, WsMapEntry>();
+    if (columnMap?.worksheets) {
+      for (const wm of columnMap.worksheets) mapIndex.set(wm.name, wm);
+    }
+
+    // Counters
+    let layer1Factual   = 0;
+    let layer2Derived   = 0;
+    let layer3OsmFinds  = 0;
+    let layer4Inference = 0;
+    let skippedCols     = 0;
+    let skippedSheets   = 0;
+    let unmapped        = 0;
+    let requiresReview  = 0;
+
+    // Deduplication tracking: metric_name seen across sheets
+    const derivedKeys   = new Map<string, number>();   // "entity_type:metric_name:period" → count
+    const factualKeys   = new Map<string, number>();   // "table:mlb_org:year" → count (unpivot)
+    const osmFindKeys   = new Map<string, number>();   // "finding_type:col_header" → count
+
+    // Detail breakdown by sheet
+    const sheetBreakdown: Array<{
+      sheet: string;
+      dataRows: number;
+      skipped: boolean;
+      reason?: string;
+      layer1: number;
+      layer2: number;
+      layer3: number;
+      layer4: number;
+      columns: Array<{
+        header: string;
+        layer: number;
+        layerName: string;
+        target: string;
+        dataRows: number;
+        requiresUnpivot: boolean;
+        dupKey?: string;
+        isDuplicate: boolean;
+        isSkipped: boolean;
+        isUnmapped: boolean;
+        requiresAdminReview: boolean;
+      }>;
+    }> = [];
+
+    const LAYER_LABELS = ["", "Factual", "Derived", "OSM Finding", "Inference"];
+
+    for (const ws of ps.worksheets) {
+      const savedWs = mapIndex.get(ws.name);
+      const wsSkipped =
+        savedWs?.skip === true ||
+        ws.detectedType === "chart" ||
+        ws.detectedType === "documentation" ||
+        ws.isEmpty;
+
+      if (wsSkipped) {
+        skippedSheets++;
+        sheetBreakdown.push({
+          sheet: ws.name,
+          dataRows: ws.totalDataRows,
+          skipped: true,
+          reason: ws.isEmpty ? "Empty" : ws.detectedType === "chart" ? "Chart / Presentation (skip)" : "Documentation",
+          layer1: 0, layer2: 0, layer3: 0, layer4: 0,
+          columns: [],
+        });
+        continue;
+      }
+
+      // Context flags for sheet
+      const sheetCtx = ws.name;
+      const isPayrollSheet = /payroll|cbt|luxury/i.test(sheetCtx);
+      const isSpendSheet   = /spend|pool|draft.*hist/i.test(sheetCtx);
+      const isProjSheet    = /projection|forecast/i.test(sheetCtx);
+
+      let wsL1 = 0, wsL2 = 0, wsL3 = 0, wsL4 = 0;
+      const colDetails: typeof sheetBreakdown[0]["columns"] = [];
+
+      for (let ci = 0; ci < ws.columns.length; ci++) {
+        const col = ws.columns[ci];
+        const savedCol = savedWs?.columns?.[ci];
+        const colSkip = savedCol?.skip === true || col.allNull;
+
+        if (colSkip) {
+          skippedCols++;
+          colDetails.push({
+            header: col.header,
+            layer: 0, layerName: "Skipped", target: "—",
+            dataRows: 0, requiresUnpivot: false, isDuplicate: false,
+            isSkipped: true, isUnmapped: false, requiresAdminReview: false,
+          });
+          continue;
+        }
+
+        // Determine evidence label (saved override > auto-detected)
+        const evidLabel  = savedCol?.evidenceLabel ?? col.detectedEvidenceLabel;
+        const { layer, layerName } = detectLayer(evidLabel);
+
+        // Determine canonical field (saved override > auto-suggested)
+        const savedField = savedCol?.canonicalField ?? "";
+        const autoField  = col.suggestedCanonicalField;
+        const autoTable  = col.suggestedTable;
+        const resolvedField = savedField ? savedField.split("|")[0] : (autoField ?? "");
+        const resolvedTable = savedField ? savedField.split("|")[1] : (autoTable ?? "");
+
+        // Flag identifier columns (they anchor records but don't produce their own rows)
+        const isIdentifier = /^(mlb_org|entity_key|player_name|club)$/i.test(resolvedField) ||
+                             col.header.toLowerCase() === "club";
+
+        // Check for year-pivot columns (wide format → require unpivot)
+        const requiresUnpivot = resolvedField === "season_column__requires_unpivot";
+
+        // Target label for display
+        let target = resolvedField && resolvedTable
+          ? `${resolvedTable}.${resolvedField}`
+          : resolvedField
+          ? resolvedField
+          : "(unmapped)";
+
+        // Layer 2/3/4: override target label
+        if (layer === 2) target = `derived_metrics [${resolvedField || "metric_name?"}]`;
+        if (layer === 3) target = `osm_research_findings [${resolvedField || "finding_text"}]`;
+        if (layer === 4) target = `diamondiq_inferences [${resolvedField || "inference_value"}]`;
+
+        // Unmapped check
+        const isUnmapped = layer === 1 && !resolvedField && !isIdentifier;
+        if (isUnmapped) unmapped++;
+
+        // Requires admin review if no canonical field set, or if evidence label
+        // is ambiguous (e.g. OSM tier classification that could be calculated or proprietary)
+        const requiresAdminReview =
+          isUnmapped ||
+          (layer === 2 && !resolvedField) ||
+          (layer === 3 && col.header.toLowerCase().includes("tier"));
+        if (requiresAdminReview) requiresReview++;
+
+        // Record count calculation
+        let rowCount = 0;
+        let dupKey: string | undefined;
+        let isDuplicate = false;
+
+        if (!isIdentifier) {
+          if (requiresUnpivot) {
+            // Year column: one record per data row (each row = one club)
+            rowCount = ws.totalDataRows;
+            const tbl = isPayrollSheet ? "club_payroll_history"
+                      : (isSpendSheet || isProjSheet) ? "club_draft_spend_history"
+                      : "club_payroll_history";
+            dupKey = `${tbl}:year_col:${col.header}`;
+            isDuplicate = factualKeys.has(dupKey);
+            if (!isDuplicate) factualKeys.set(dupKey, rowCount);
+            else factualKeys.set(dupKey, (factualKeys.get(dupKey) ?? 0) + rowCount);
+          } else if (layer === 1) {
+            rowCount = ws.totalDataRows;
+            dupKey = `factual:${resolvedTable}:${resolvedField}`;
+            isDuplicate = factualKeys.has(dupKey);
+            if (!isDuplicate) factualKeys.set(dupKey, rowCount);
+          } else if (layer === 2) {
+            rowCount = ws.totalDataRows;
+            const metricKey = resolvedField || col.header;
+            dupKey = `derived:${metricKey}`;
+            isDuplicate = derivedKeys.has(dupKey);
+            derivedKeys.set(dupKey, (derivedKeys.get(dupKey) ?? 0) + rowCount);
+          } else if (layer === 3) {
+            rowCount = ws.totalDataRows;
+            const findType = col.header;
+            dupKey = `osm:${findType}`;
+            isDuplicate = osmFindKeys.has(dupKey);
+            osmFindKeys.set(dupKey, (osmFindKeys.get(dupKey) ?? 0) + rowCount);
+          } else if (layer === 4) {
+            rowCount = ws.totalDataRows;
+          }
+        }
+
+        // Accumulate sheet counters
+        switch (layer) {
+          case 1: wsL1 += rowCount; layer1Factual   += rowCount; break;
+          case 2: wsL2 += rowCount; layer2Derived   += rowCount; break;
+          case 3: wsL3 += rowCount; layer3OsmFinds  += rowCount; break;
+          case 4: wsL4 += rowCount; layer4Inference += rowCount; break;
+        }
+
+        colDetails.push({
+          header: col.header,
+          layer,
+          layerName: isIdentifier ? "identifier" : LAYER_LABELS[layer],
+          target,
+          dataRows: rowCount,
+          requiresUnpivot,
+          dupKey,
+          isDuplicate,
+          isSkipped: false,
+          isUnmapped,
+          requiresAdminReview,
+        });
+      }
+
+      sheetBreakdown.push({
+        sheet: ws.name,
+        dataRows: ws.totalDataRows,
+        skipped: false,
+        layer1: wsL1, layer2: wsL2, layer3: wsL3, layer4: wsL4,
+        columns: colDetails,
+      });
+    }
+
+    // Compute duplicate totals from multi-count entries
+    let duplicatesDetected = 0;
+    for (const count of derivedKeys.values()) if (count > ws_dataRows(ps, count)) duplicatesDetected++;
+    // Simpler: flag any key seen more than once
+    duplicatesDetected = 0;
+    for (const [, count] of derivedKeys.entries()) if (count > 0) {
+      // count > one worksheet's rows means it appeared in multiple sheets
+      const sheetRowCounts = ps.worksheets.map(w => w.totalDataRows);
+      const maxSingle = Math.max(...sheetRowCounts, 1);
+      if (count > maxSingle) duplicatesDetected++;
+    }
+    for (const [, count] of factualKeys.entries()) if (count > 0) {
+      const sheetRowCounts = ps.worksheets.map(w => w.totalDataRows);
+      const maxSingle = Math.max(...sheetRowCounts, 1);
+      if (count > maxSingle) duplicatesDetected++;
+    }
+
+    // Safety: confirm production table counts are still zero
+    const [ph] = await query<{ n: string }>(
+      `SELECT COUNT(*) as n FROM club_payroll_history WHERE is_fixture = FALSE`
+    );
+    const [ds] = await query<{ n: string }>(
+      `SELECT COUNT(*) as n FROM club_draft_spend_history WHERE is_fixture = FALSE`
+    );
+    const [dm] = await query<{ n: string }>(
+      `SELECT COUNT(*) as n FROM derived_metrics WHERE is_fixture = FALSE`
+    );
+    const [orf] = await query<{ n: string }>(
+      `SELECT COUNT(*) as n FROM osm_research_findings WHERE is_fixture = FALSE`
+    );
+    const [di] = await query<{ n: string }>(
+      `SELECT COUNT(*) as n FROM diamondiq_inferences WHERE is_fixture = FALSE`
+    );
+
+    return res.json({
+      ok: true,
+      data: {
+        jobId: job.id,
+        status: job.status,
+        fileName: job.original_filename,
+        fileHash: (job.file_hash as string)?.slice(0, 16) + "…",
+        safetyCheck: {
+          club_payroll_history_rows: parseInt(ph?.n ?? "0"),
+          club_draft_spend_history_rows: parseInt(ds?.n ?? "0"),
+          derived_metrics_rows: parseInt(dm?.n ?? "0"),
+          osm_research_findings_rows: parseInt(orf?.n ?? "0"),
+          diamondiq_inferences_rows: parseInt(di?.n ?? "0"),
+          allZero:
+            parseInt(ph?.n ?? "0") === 0 &&
+            parseInt(ds?.n ?? "0") === 0 &&
+            parseInt(dm?.n ?? "0") === 0 &&
+            parseInt(orf?.n ?? "0") === 0 &&
+            parseInt(di?.n ?? "0") === 0,
+        },
+        summary: {
+          layer1FactualRecords: layer1Factual,
+          layer2DerivedMetrics: layer2Derived,
+          layer3OsmFindings:    layer3OsmFinds,
+          layer4Inferences:     layer4Inference,
+          totalRecords:         layer1Factual + layer2Derived + layer3OsmFinds + layer4Inference,
+          duplicatesDetected,
+          skippedSheets,
+          skippedColumns: skippedCols,
+          unmappedFields: unmapped,
+          requiresOsmReview: requiresReview,
+        },
+        provenanceLinks: {
+          sourceFileVersionId: job.source_file_version_id,
+          datasetId: job.dataset_id,
+          ingestionJobId: job.id,
+          note: "Every committed record will reference ingestion_job_id, source_file_version_id, source_worksheet, source_excel_row, and source_excel_column for full audit chain.",
+        },
+        sheets: sheetBreakdown,
+      },
+    });
+  } catch (err) {
+    console.error("[ingestion/commit-preview]", err);
+    return res.status(500).json({ ok: false, error: "Server error during commit preview." });
+  }
+});
+
+// Helper referenced in commit-preview to avoid reference error
+function ws_dataRows(_ps: { worksheets: ParsedWorksheet[] }, _n: number): number {
+  return 100; // threshold above a single sheet's row count to detect cross-sheet duplication
+}
 
 // ── POST /api/admin/ingestion/:jobId/reparse — re-parse stored source file ────
 // Re-runs the parser against the already-stored file without requiring a
