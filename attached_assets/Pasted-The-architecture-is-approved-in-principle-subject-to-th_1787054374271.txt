@@ -1,0 +1,94 @@
+The architecture is approved in principle, subject to the following REQUIRED revisions. Do not implement yet.
+
+1. ATHLETE-VISIBLE VERIFICATION RULE
+
+Change the default rule:
+
+Unverified imported records may be used for INTERNAL OSM research and Admin analysis.
+
+They may NOT be used as factual evidence in an athlete-visible published report unless an OSM Admin explicitly reviews/approves the underlying evidence or report.
+
+Production athlete-visible evidence should therefore be osm_reviewed or cross_verified, unless an Admin explicitly overrides the restriction during report review.
+
+Do not make unverified evidence athlete-visible merely by attaching an "unverified" label.
+
+2. DO NOT USE A UNIVERSAL n=5 CUTOFF
+
+Do not automatically suppress valid historical evidence simply because fewer than 5 records match.
+
+Instead create evidence-strength/sample-size handling.
+
+For example:
+- n=0 = DATA GAP / Intelligence Request
+- small n = LIMITED SAMPLE, prominently disclosed
+- larger n = stronger descriptive evidence
+
+Do not infer statistical significance from these categories.
+
+The exact methodology thresholds should ultimately be configurable by OSM Admin rather than permanently hard-coded.
+
+A report with 3 legitimate historical comparables is preferable to inventing data or pretending no evidence exists. It must simply disclose n=3 and the limitations.
+
+3. MOVE GOOGLE DRIVE INGESTION EARLIER
+
+The existing OSM DiamondIQ research archive already resides in Google Drive. I do not want the production workflow to require repeatedly downloading files locally and manually re-uploading them.
+
+Keep manual CSV/XLSX upload as a useful Admin capability and development/testing path.
+
+However, after the core ingestion/parser/provenance pipeline works with a sample file, move the folder-scoped Google Drive connector forward in the implementation sequence so the existing research archive can be inventoried and ingested directly.
+
+The Drive integration must remain READ ONLY and limited to the specifically shared DiamondIQ research folder.
+
+4. NORMALIZE DRAFT DATA — AVOID DUPLICATE FACTS
+
+Reevaluate whether club_draft_history should be a separate physical table.
+
+If the same historical draft selection already exists in draft_players, club draft history should normally be derived from that canonical record through SQL queries/views.
+
+Do not maintain two independent copies of player/pick/bonus facts that could diverge.
+
+Only create a separate club-specific table for information that genuinely cannot be represented by the canonical draft-selection record.
+
+5. PROVENANCE IS MANDATORY
+
+Keep the proposed row-level provenance and report_citations architecture.
+
+Every factual number, player, selection, bonus, ranking, NIL record, etc. appearing in a report must remain traceable to its underlying production record(s).
+
+6. SOURCE CONFLICTS
+
+Add a design for conflicting source records.
+
+If two legitimate sources disagree about a factual value, DiamondIQ must not silently choose one.
+
+The system should preserve both source records, flag the conflict for OSM review, and allow OSM to designate the approved value/evidence status.
+
+7. RAW SOURCE PRESERVATION
+
+For every ingestion, preserve an immutable reference to the original source file/version so future audits can reconstruct what was imported.
+
+Re-importing an updated spreadsheet must not destroy provenance for reports generated from an earlier version.
+
+8. 2026 DRAFT YEAR
+
+Treat the 2026 MLB Draft as a completed historical draft year. Production data availability is determined by what exists in the OSM datasets, not by the Jackson Miller DEV fixture.
+
+9. EXISTING DRIVE INVENTORY
+
+Do not require me to manually reconstruct a list of datasets that already exists in the designated Google Drive archive.
+
+Once folder access is established, DiamondIQ should inventory the designated folder and show OSM Admin what files/datasets exist, their file types, modified dates, likely domain/category, and ingestion status.
+
+Admin then determines what gets ingested.
+
+10. DEV FIXTURES
+
+Retain the proposed hard fixture/production separation, but DEV fixture reports/statistics should also be clearly identified visually anywhere an Admin encounters them.
+
+They must never be publishable to an athlete.
+
+Now revise Sections A-H and the implementation sequence to incorporate these requirements.
+
+DO NOT WRITE CODE YET.
+
+Return the revised plan and identify the FIRST single action you will need from me to begin implementation.
