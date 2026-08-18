@@ -1,0 +1,70 @@
+Audit Job #5 (`2025 Draft Signings FINAL.xlsx`) in full. Do not commit anything and do not make any code changes yet.
+
+Review the already-parsed ingestion job directly from the backend/database. I do not want to manually scroll through the Ingestion Review UI and report the mappings to you.
+
+Report:
+
+1. All 3 worksheet names, detected header rows, row counts, column counts, and classifications.
+
+2. Every column header on each worksheet.
+
+3. The evidence layer and canonical destination currently assigned/suggested for every column.
+
+4. Sample values sufficient to determine what each column actually represents.
+
+5. Any columns that are unmapped, incorrectly mapped, ambiguous, or being skipped.
+
+6. Whether the existing production schema can correctly store all factual information in this workbook, especially:
+   - individual 2025 draft selections/signings
+   - signing bonuses
+   - slot values
+   - MLB clubs
+   - player names
+   - schools
+   - positions
+   - rounds
+   - overall picks
+   - selections/signings counts
+   - and any other player-level or club-level factual fields actually present.
+
+7. Identify any overlap with records already committed from Jobs #3 and #4 and explain how deduplication/source assertions would handle that overlap. We WANT multiple independent sources retained as provenance when they corroborate the same fact; we do NOT want duplicate canonical records.
+
+8. Identify anything that is:
+   - L1 factual data
+   - L2 calculated/derived data
+   - L3 OSM proprietary research/findings
+   - L4 DiamondIQ inference/projection
+
+EVIDENCE-FIRST RULES REMAIN MANDATORY.
+
+Do not invent mappings merely to fit the existing schema.
+
+If the schema lacks an appropriate destination for legitimate information in this workbook, identify the SMALLEST necessary schema addition.
+
+Do not redesign the ingestion system.
+
+Do not build additional infrastructure merely because it might be useful later.
+
+The current priority is getting OSM's existing research corpus into DiamondIQ correctly and efficiently.
+
+End with a concise:
+
+JOB #5 PROPOSED INGESTION PLAN
+
+Show:
+- New canonical factual records that would be added
+- Existing facts that would only receive an additional source assertion
+- Derived records that would be added
+- OSM findings that would be added
+- Inferences, if any
+- Records/columns that should be skipped
+- Any schema addition actually required
+- Any genuine issue requiring OSM approval
+- Expected record counts by destination table
+
+STOP AFTER THE AUDIT.
+
+Do NOT commit Job #5.
+Do NOT modify the schema.
+Do NOT change application code.
+Do NOT implement anything until I explicitly approve the proposed ingestion plan.
