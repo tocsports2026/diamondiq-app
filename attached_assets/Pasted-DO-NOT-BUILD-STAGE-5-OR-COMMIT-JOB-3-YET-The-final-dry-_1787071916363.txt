@@ -1,0 +1,219 @@
+DO NOT BUILD STAGE 5 OR COMMIT JOB #3 YET.
+
+The final dry-run exposed record-count and deduplication issues that must be resolved before production ingestion.
+
+1. FIX THE 34-"CLUB" ASSUMPTION
+
+Your preview states:
+
+34 clubs × 6 years × 2 tables = 408 core Layer 1 rows.
+
+There are 30 MLB clubs.
+
+The worksheet may contain 34 data rows, but that does NOT mean all 34 rows are MLB clubs.
+
+Before commit, identify every unique value in the Club column for:
+
+- Payroll & CBT History
+- Draft Spend History
+- Trend Analysis
+- 2026 Draft Projection
+
+Classify each row as:
+
+A. Valid MLB club
+B. League/aggregate/summary row
+C. Methodology/note/source row
+D. Blank/spacer
+E. Unknown / needs OSM review
+
+Only the 30 valid MLB clubs may generate club-level production facts.
+
+Show me the complete list of unique Club values and their classification.
+
+Do not silently import an aggregate or summary row as an MLB club.
+
+2. RECALCULATE LAYER 1 RECORD COUNT
+
+Canonical Layer 1 facts must be normalized and deduplicated.
+
+For club payroll:
+
+One canonical row should represent:
+mlb_org + season + payroll data type/source version
+
+For draft pool/spend:
+
+One canonical row should represent:
+mlb_org + draft_year + factual club draft values/source version
+
+The same 2026 official bonus pool appearing in:
+
+- Draft Spend History
+- Trend Analysis
+- 2026 Draft Projection
+
+must NOT create three independent canonical facts.
+
+Those worksheet occurrences should either:
+
+A. resolve to one canonical factual record with multiple provenance references, or
+B. remain separate source assertions linked to one approved canonical fact if the architecture needs source-level assertion preservation.
+
+They must not inflate the production fact count.
+
+Likewise:
+
+2026 Draft Pick (1st Rd)
+
+should enrich the canonical 2026 club/draft-year record, not create an additional club-year factual row solely because the field appears on another worksheet.
+
+Recalculate the proposed Layer 1 count after proper normalization and show the formula used.
+
+3. EXPLAIN THE CURRENT 782 COUNT
+
+Break the proposed 782 Layer 1 records down by:
+
+- source worksheet
+- destination table
+- record type
+- number of unique club/year keys
+- number identified as duplicates
+- number identified as additional source assertions versus genuinely new canonical facts
+
+I need to understand exactly why 782 was proposed.
+
+4. STRENGTHEN CROSS-SHEET DEDUPLICATION
+
+The preview reports only 2 duplicates detected.
+
+That appears too low because multiple sheets repeat the same club-level facts and derived metrics.
+
+Run cross-sheet duplicate detection using canonical identity keys, not only workbook column/metric keys.
+
+Examples:
+
+club payroll factual identity:
+mlb_org + season + payroll_data_type
+
+draft pool factual identity:
+mlb_org + draft_year + pool_allotment fact type
+
+derived metric identity:
+entity_type + entity_key + metric_name + period_start + period_end + methodology_version
+
+OSM finding identity should NOT automatically deduplicate merely because two findings have similar text. Preserve distinct research findings when their provenance differs.
+
+Show:
+
+- exact duplicates
+- repeated factual assertions from different worksheet locations
+- conflicting assertions
+- derived-metric duplicates
+- records that should merge into one canonical fact
+
+5. PRESERVE MULTIPLE SOURCE LOCATIONS WITHOUT DUPLICATING THE FACT
+
+If the same verified fact appears in multiple worksheets, I still want DiamondIQ to know every place it appeared.
+
+Do not solve deduplication by throwing provenance away.
+
+If necessary, create/propose a table such as:
+
+record_source_assertions
+
+that can link one canonical production record to multiple source locations:
+
+- source_file_version_id
+- ingestion_job_id
+- worksheet
+- Excel row
+- Excel column
+- source preamble/provider
+- asserted value
+
+This allows:
+
+ONE canonical factual record
+→ MANY supporting source assertions
+
+and also allows conflicts to be detected when the asserted values disagree.
+
+6. FIX THE REVIEW-COUNT DISCREPANCY
+
+The summary says:
+
+Requires OSM review: 7
+
+but the table lists 9 mapping issues.
+
+Recalculate and report the correct count.
+
+Do not allow summary counts and detailed exception counts to disagree.
+
+7. CURRENT 9 MAPPING ISSUES
+
+Keep the intended corrections:
+
+- Payroll CAGR → L2 cagr_payroll_5yr
+- Draft Spend CAGR → L2 cagr_pool_5yr
+- 2025 Rank → L2 pool_rank
+- CBT Payroll Tier → L2 or L3 according to methodology
+- Times Picked-10-Spots Penalty proxy → L2 times_penalty_proxy
+- Draft Pool Tier → L2 draft_pool_tier
+- Payroll ↔ Draft Pool Correlation → L3 finding:correlation
+- Assumed Total-Spend-vs-Pool Rate → L3 finding:methodology_assumption
+- Times Over CBT Threshold → L2 times_over_cbt
+
+Do not commit until all nine are explicitly resolved.
+
+8. DERIVED METRIC DEDUPLICATION
+
+Trend Analysis and 2026 Draft Projection repeat some calculations already present elsewhere.
+
+A calculated value repeated in another worksheet should not automatically produce another derived_metrics record if it represents:
+
+- the same entity
+- same metric
+- same period
+- same methodology
+- same source version
+- same value
+
+Instead preserve the additional source location as provenance/supporting assertion.
+
+If value or methodology differs, preserve both and flag the distinction.
+
+9. LAYER 4 INFERENCE COUNT
+
+108 proposed inference records = 36 rows × 3 inference fields.
+
+Recalculate this after valid-club filtering.
+
+Only actual MLB club rows should generate club-specific inference records.
+
+Any aggregate/summary/non-club row must not produce a DiamondIQ inference.
+
+10. RETURN A NEW DRY RUN
+
+After correcting the above, show me:
+
+A. unique Club values and classifications
+B. valid MLB club count per worksheet
+C. revised Layer 1 factual count
+D. revised Layer 2 derived metric count
+E. revised Layer 3 OSM finding count
+F. revised Layer 4 inference count
+G. exact duplicate count
+H. repeated source-assertion count
+I. conflict count
+J. unmapped/review-required count
+K. skipped/non-club/summary rows
+L. records by destination table
+M. provenance/source-assertion strategy
+N. confirmation that Job #3 remains preview-only
+O. confirmation that zero production records have been committed
+
+STOP THERE.
+
+Do not build or execute Stage 5 until I explicitly approve the corrected dry run.
