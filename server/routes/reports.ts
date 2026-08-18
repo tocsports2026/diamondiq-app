@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireStaff } from "../middleware/auth";
 import { query, queryOne } from "../db";
 import { v4 as uuidv4 } from "uuid";
+import { retrieveAndAssembleClubReport, type ClubReportParams } from "../evidence/clubRetrieval";
 
 const router = Router();
 
@@ -179,12 +180,27 @@ router.post("/", requireAuth, async (req, res) => {
 
     const ref = `DIQ-${uuidv4().slice(0, 8).toUpperCase()}`;
 
-    // Build initial content structure based on type and research params
-    const content = buildInitialContent(
-      type as string,
-      researchParams || {},
-      researchQuestion || ""
-    );
+    // Build report content — evidence-backed for club, placeholder for draft/nil
+    let content: Record<string, unknown>;
+    if (type === "club") {
+      // Evidence-backed path: retrieve from production research database
+      const clubParams: ClubReportParams = {
+        club: (researchParams as Record<string, string>)?.club || "",
+        draftYears: (researchParams as Record<string, string>)?.draftYears,
+        pickRange: (researchParams as Record<string, string>)?.pickRange,
+      };
+      if (!clubParams.club) {
+        return res.status(400).json({ ok: false, error: "researchParams.club is required for club reports" });
+      }
+      content = await retrieveAndAssembleClubReport(clubParams) as unknown as Record<string, unknown>;
+    } else {
+      // Placeholder path for unsupported types (draft, nil) — retained until evidence engine extended
+      content = buildInitialContent(
+        type as string,
+        researchParams || {},
+        researchQuestion || ""
+      );
+    }
 
     const [report] = await query(
       `INSERT INTO reports (report_ref, athlete_id, type, status, title, description, research_question, content)

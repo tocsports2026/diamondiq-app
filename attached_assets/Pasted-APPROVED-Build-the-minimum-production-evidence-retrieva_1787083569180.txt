@@ -1,0 +1,269 @@
+APPROVED. Build the minimum production evidence-retrieval integration necessary to make DiamondIQ use the research database.
+
+This is now the highest priority.
+
+Do NOT redesign the application.
+Do NOT add dashboards.
+Do NOT rebuild the report lifecycle.
+Do NOT create a Baltimore-specific demo.
+Do NOT introduce general AI/model knowledge as a baseball data source.
+
+The objective is:
+
+QUESTION / REPORT REQUEST
+        ↓
+RETRIEVE OSM/DiamondIQ EVIDENCE
+        ↓
+CLASSIFY + ASSEMBLE EVIDENCE
+        ↓
+BUILD REPORT CONTENT
+        ↓
+OSM REVIEW
+        ↓
+PUBLISH
+        ↓
+ATHLETE VIEW
+
+The existing OSM review/publish/athlete visibility lifecycle is correct and must remain intact.
+
+--------------------------------------------------
+1. BUILD ONE REUSABLE EVIDENCE RETRIEVAL MODULE
+--------------------------------------------------
+
+Create a server-side evidence retrieval module used by report generation.
+
+It must be parameter-driven, NOT hard-coded to Baltimore or any particular athlete, club, year, or report.
+
+For the first implementation, support CLUB reports completely enough for a real end-to-end test.
+
+Retrieve relevant production records from:
+
+L1 VERIFIED FACTUAL DATA
+- club_payroll_history
+- club_draft_spend_history
+- league_facts when relevant
+
+L2 CALCULATED / DERIVED
+- derived_metrics
+
+L3 OSM PROPRIETARY RESEARCH
+- osm_research_findings
+
+L4 DIAMONDIQ INFERENCE
+- diamondiq_inferences
+
+EXTERNAL RESEARCH CORPUS
+- osm_articles
+- osm_article_transcription_lines
+
+PROVENANCE
+- record_source_assertions
+- record_derivations
+- source_file_versions
+- ingestion_jobs
+- other existing provenance fields as necessary
+
+All production research queries must exclude fixture data.
+
+--------------------------------------------------
+2. DATA-FIRST RULE IS ABSOLUTE
+--------------------------------------------------
+
+DiamondIQ must retrieve available evidence BEFORE constructing report conclusions.
+
+Never use model/general AI knowledge to supply missing baseball facts.
+
+If the database does not contain evidence necessary to answer something:
+
+DISPLAY THE DATA GAP.
+
+Do not guess.
+Do not estimate unless an existing approved DiamondIQ inference explicitly contains the estimate.
+Do not silently fill the hole.
+
+--------------------------------------------------
+3. EVIDENCE CLASSES MUST REMAIN DISTINCT
+--------------------------------------------------
+
+The report assembly must preserve the distinction among:
+
+Verified Public Information
+Calculated / Derived Result
+OSM Proprietary Research
+DiamondIQ Analysis / Inference
+External Source Content
+
+Do not collapse these into one generic evidence category.
+
+External article content is NOT automatically verified factual information.
+
+A Baseball America, Perfect Game, D1Baseball, Prep Baseball, USA Baseball, etc. statement must remain external_source_content unless/until an individual claim is separately promoted through a future evidence-validation process.
+
+--------------------------------------------------
+4. ARTICLE CORPUS RETRIEVAL
+--------------------------------------------------
+
+For the first implementation, use deterministic database text retrieval over osm_article_transcription_lines.
+
+Search using relevant report parameters such as:
+- MLB organization full name
+- common organization/team name
+- other directly relevant query terms from the research request
+
+Return matching transcription lines with:
+- article_id
+- source_number
+- publisher when available
+- PDF filename
+- publication date when available
+- PDF page
+- PDF line
+- source worksheet
+- line text
+- evidence_class = external_source_content
+
+Do not implement embeddings/vector infrastructure yet unless deterministic text retrieval is technically incapable of supporting the first test.
+
+We can improve semantic retrieval later.
+
+--------------------------------------------------
+5. CITATION ASSEMBLY
+--------------------------------------------------
+
+Every factual number, derived metric, OSM finding, DiamondIQ inference, or external-source excerpt used in the report must be traceable to its underlying evidence.
+
+Populate the existing report content sources[] structure.
+
+Use existing provenance wherever available:
+
+- source_file_version
+- ingestion_job
+- source worksheet
+- source row/column
+- source assertions
+- derivation links
+- article
+- PDF filename
+- PDF page
+- PDF line
+- publisher
+- publication date
+
+Do not fabricate citation information that is absent.
+
+The existing ReportViewPage source renderer should be reused.
+
+--------------------------------------------------
+6. REPLACE PLACEHOLDER GENERATION FOR CLUB REPORTS
+--------------------------------------------------
+
+For CLUB reports, replace the current buildInitialContent placeholder behavior with evidence-backed content assembly.
+
+Do not delete buildInitialContent if other report types still depend on it.
+
+Instead:
+
+- CLUB reports → new evidence-backed generation path
+- unsupported report types → retain current safe placeholder behavior temporarily
+
+Clearly isolate this so Draft/NIL can migrate to the evidence engine next without rewriting the retrieval layer.
+
+--------------------------------------------------
+7. REPORT CONTENT
+--------------------------------------------------
+
+For a club report, assemble sections from available evidence including:
+
+A. Historical Payroll Profile
+B. Historical Draft Spending / Pool Behavior
+C. Derived Trend Metrics
+D. OSM Research Findings
+E. Existing DiamondIQ Inferences
+F. Relevant External Research
+G. Data Gaps / Limitations
+H. Sources / Provenance
+
+Only include claims supported by retrieved evidence.
+
+Do not manufacture narrative conclusions beyond what the retrieved records support.
+
+--------------------------------------------------
+8. DO NOT CREATE NEW INFERENCE DURING THIS STEP
+--------------------------------------------------
+
+Existing records in diamondiq_inferences may be surfaced and clearly labeled.
+
+Do NOT create new AI/model-generated DiamondIQ inference yet.
+
+This first integration test is about proving:
+
+DATA RETRIEVAL
++
+EVIDENCE CLASSIFICATION
++
+PROVENANCE
++
+REPORT ASSEMBLY
++
+OSM REVIEW GATING
+
+Once that works, we can separately decide how DiamondIQ should generate new analytical conclusions.
+
+--------------------------------------------------
+9. FIRST END-TO-END TEST
+--------------------------------------------------
+
+After implementation, create ONE test Club report using:
+
+"What is the Baltimore Orioles' historical draft and payment profile — payroll trend, bonus pool behavior, and what does OSM's research indicate about their draft strategy?"
+
+Use Baltimore only as the TEST INPUT.
+
+Do not hard-code Baltimore into the retrieval engine.
+
+The test should retrieve whatever production evidence actually exists.
+
+--------------------------------------------------
+10. VERIFY THE TEST
+--------------------------------------------------
+
+Report back:
+
+A. Every database table queried.
+
+B. Number of records retrieved from each.
+
+C. The generated report sections.
+
+D. Evidence class attached to each section/claim.
+
+E. Sources/citations assembled.
+
+F. Any article transcription matches retrieved.
+
+G. Every data gap surfaced.
+
+H. Confirmation no fixture records were used.
+
+I. Confirmation no model/general AI baseball knowledge was used.
+
+J. Confirmation no new DiamondIQ inference was generated.
+
+K. Confirmation the report remains PENDING and is NOT athlete-visible until OSM review/publish.
+
+L. The report reference so I can open it in the UI and review it myself.
+
+--------------------------------------------------
+11. STOP AFTER THE FIRST TEST
+--------------------------------------------------
+
+Do not proceed to Draft reports.
+Do not proceed to NIL reports.
+Do not add semantic/vector search.
+Do not add an LLM.
+Do not create new analytical inference.
+Do not redesign the UI.
+
+STOP after the Baltimore test report is generated and verified.
+
+I want to inspect the actual evidence-backed report in the DiamondIQ interface before approving the next development step.
