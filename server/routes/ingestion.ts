@@ -127,6 +127,10 @@ const CALCULATED_HEADER_PATTERNS = [
   /total/i, /avg/i, /average/i, /median/i, /pct/i, /percent/i,
   /rate/i, /ratio/i, /count/i, /sum/i, /ytd/i, /delta/i, /change/i,
   /trend/i, /index/i,
+  // Financial aggregates and growth metrics
+  /cagr/i,                    // Compound Annual Growth Rate (e.g. "5-Yr CAGR")
+  /yr\s*avg/i,                // "5-Yr Avg", "3-Yr Avg"
+  /over.{0,5}under/i,         // "Over/Under CBT", "Over/Under Pool" (net vs threshold)
 ];
 
 // OSM internal/proprietary notes — always labelled OSM Proprietary Data.
@@ -185,6 +189,19 @@ const CANONICAL_FIELD_HINTS: Array<{ patterns: RegExp[]; field: string; table: s
   { patterns: [/pick\s*#?$/i, /pick\s*overall/i], field: "pick_overall", table: "slot_values" },
   // OSM proprietary notes — prefer osm_notes over generic notes wherever schema supports it
   { patterns: [/osm\s*notes?/i, /osm\s*comment/i, /osm\s*remark/i, /internal\s*notes?/i, /agent\s*notes?/i, /scout\s*notes?/i], field: "osm_notes", table: "draft_players" },
+  // ── club_payroll_history ──────────────────────────────────────────────────
+  { patterns: [/total\s*payroll/i, /payroll\s*total/i], field: "total_payroll", table: "club_payroll_history" },
+  { patterns: [/cbt\s*threshold/i, /luxury\s*tax\s*threshold/i], field: "cbt_threshold", table: "club_payroll_history" },
+  { patterns: [/luxury\s*tax\s*paid/i, /cbt\s*paid/i], field: "luxury_tax_paid", table: "club_payroll_history" },
+  { patterns: [/over.{0,5}under\s*cbt/i, /cbt\s*over/i, /cbt\s*under/i], field: "cbt_overage", table: "club_payroll_history" },
+  // ── club_draft_spend_history ──────────────────────────────────────────────
+  { patterns: [/total\s*draft\s*spend/i, /draft\s*spend\s*total/i, /draft\s*spending/i], field: "total_draft_spend", table: "club_draft_spend_history" },
+  { patterns: [/pool\s*allot/i, /draft\s*pool/i, /^allot/i], field: "pool_allotment", table: "club_draft_spend_history" },
+  { patterns: [/over.{0,5}under\s*pool/i, /pool\s*over/i, /pool\s*under/i], field: "over_under_pool", table: "club_draft_spend_history" },
+  // ── Wide-format year columns (e.g. "2021", "2022" as column headers) ──────
+  // These mark a columnar/pivoted layout. The commit step must unpivot them
+  // into one row per (club, season). Admin sees this as the suggested field.
+  { patterns: [/^(19|20)\d{2}$/], field: "season_column__requires_unpivot", table: "club_payroll_history" },
 ];
 
 function suggestCanonicalField(header: string): { field: string; table: string } | null {
@@ -197,6 +214,107 @@ function suggestCanonicalField(header: string): { field: string; table: string }
   return null;
 }
 
+// ── Header-row detection ──────────────────────────────────────────────────────
+// Real-world workbooks frequently have title rows, source attribution, or
+// methodology notes above the actual tabular header.  This section detects
+// the real header row instead of blindly trusting row 0.
+
+interface RowWithPosition {
+  excelRow: number;     // 1-based Excel row number (accounts for sheet start offset)
+  arrayIndex: number;   // 0-based index in the blankrows=true read array
+  values: (string | number | boolean | null)[];
+  isBlank: boolean;
+}
+
+/**
+ * Score a single row for how likely it is to be a tabular header row.
+ * Higher = more header-like.  Single-cell rows always return -10 (title rows).
+ */
+function scoreRowAsHeader(
+  values: (string | number | boolean | null)[],
+  maxColCount: number
+): number {
+  const nonNull = values.filter((v) => v !== null && v !== undefined && v !== "");
+  const nonNullCount = nonNull.length;
+
+  // A header must span at least 2 columns.  Single-cell = title / description.
+  if (nonNullCount <= 1) return -10;
+
+  const stringCount = nonNull.filter((v) => typeof v === "string").length;
+  const stringRatio = stringCount / nonNullCount;
+  const spreadRatio = nonNullCount / Math.max(maxColCount, 1);
+  const avgLen =
+    nonNull.map((v) => String(v)).reduce((s, t) => s + t.length, 0) / nonNullCount;
+
+  let score = 0;
+
+  // Multi-column presence (the more columns filled, the more header-like).
+  if (nonNullCount >= 2) score += 2;
+  if (nonNullCount >= 4) score += 2;
+  if (nonNullCount >= 6) score += 1;
+
+  // String content.  Year-number columns (2021, 2022 …) are valid header cells,
+  // so partial string ratios still get credit.
+  if (stringRatio >= 0.5) score += 3;
+  else if (stringRatio >= 0.1) score += 1;
+
+  // Wide column spread relative to the sheet's populated columns.
+  if (spreadRatio >= 0.5) score += 2;
+  else if (spreadRatio >= 0.3) score += 1;
+
+  // Short cell values — header labels are terse.
+  if (avgLen <= 15) score += 2;
+  else if (avgLen <= 35) score += 1;
+
+  return score;
+}
+
+/**
+ * Scan the first 10 non-blank rows and return the most likely tabular header,
+ * along with all rows that precede it (preamble / title / source rows).
+ */
+function detectHeaderRow(allRows: RowWithPosition[]): {
+  headerRow: RowWithPosition;
+  preambleRows: RowWithPosition[];
+  confidence: "high" | "low";
+} {
+  const nonBlankRows = allRows.filter((r) => !r.isBlank);
+
+  if (nonBlankRows.length === 0) {
+    const fallback = allRows[0] ?? {
+      excelRow: 1, arrayIndex: 0, values: [], isBlank: true,
+    };
+    return { headerRow: fallback, preambleRows: [], confidence: "low" };
+  }
+
+  // Max non-null count across first 15 non-blank rows (used for spread ratio).
+  const maxColCount = Math.max(
+    ...nonBlankRows
+      .slice(0, 15)
+      .map((r) => r.values.filter((v) => v !== null && v !== undefined && v !== "").length),
+    1
+  );
+
+  // Score the first 10 non-blank rows.
+  const candidates = nonBlankRows.slice(0, 10).map((row) => ({
+    row,
+    score: scoreRowAsHeader(row.values, maxColCount),
+  }));
+
+  const best = candidates.reduce((prev, curr) =>
+    curr.score > prev.score ? curr : prev
+  );
+
+  // Preamble = every row (blank or non-blank) before the detected header.
+  const preambleRows = allRows.filter((r) => r.arrayIndex < best.row.arrayIndex);
+
+  // Confidence: high if we moved past the first non-blank row OR score is strong.
+  const movedPastFirst = best.row !== nonBlankRows[0];
+  const confidence: "high" | "low" = movedPastFirst || best.score >= 6 ? "high" : "low";
+
+  return { headerRow: best.row, preambleRows, confidence };
+}
+
 // ── Parse XLSX/CSV into worksheet preview ────────────────────────────────────
 
 interface ParsedWorksheet {
@@ -204,6 +322,9 @@ interface ParsedWorksheet {
   detectedType: string;
   detectedTypeLabel: string;
   detectedTypeConfidence: "high" | "low";
+  detectedHeaderExcelRow: number;           // 1-based Excel row of detected header
+  detectedHeaderConfidence: "high" | "low"; // confidence in the header-row detection
+  preamble: { excelRow: number; raw: string[] }[]; // non-blank rows before header
   headers: (string | null)[];
   sampleRows: (string | number | boolean | null)[][];
   totalDataRows: number;
@@ -238,19 +359,18 @@ function parseWorkbook(filePath: string, fileExt: string): {
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    // Get as array-of-arrays (header:1 gives raw rows)
-    const rawData = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
-      header: 1,
-      defval: null,
-      blankrows: false,
-    });
+    const ref = sheet["!ref"];
 
-    if (rawData.length === 0) {
+    // Sheet has no populated cells at all — treat as empty/chart.
+    if (!ref) {
       worksheets.push({
         name: sheetName,
         detectedType: "chart",
         detectedTypeLabel: "Chart / Presentation Data (skip)",
         detectedTypeConfidence: "high",
+        detectedHeaderExcelRow: 1,
+        detectedHeaderConfidence: "low",
+        preamble: [],
         headers: [],
         sampleRows: [],
         totalDataRows: 0,
@@ -260,19 +380,75 @@ function parseWorkbook(filePath: string, fileExt: string): {
       continue;
     }
 
-    // The first non-empty row is treated as the header row
-    const headerRow = (rawData[0] as (string | number | boolean | null)[]).map(
-      (h) => (h !== null && h !== undefined ? String(h).trim() : null)
+    // Decode starting Excel row so array indices map to real Excel row numbers.
+    const range = XLSX.utils.decode_range(ref);
+    const startExcelRow = range.s.r + 1; // SheetJS uses 0-based rows; Excel is 1-based
+
+    // Read ALL rows including blank rows to preserve Excel row positions.
+    const rawWithBlanks = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(
+      sheet,
+      { header: 1, defval: null, blankrows: true }
     );
-    const dataRows = rawData.slice(1) as (string | number | boolean | null)[][];
+
+    const allRows: RowWithPosition[] = (
+      rawWithBlanks as (string | number | boolean | null)[][]
+    ).map((values, arrayIndex) => ({
+      excelRow: startExcelRow + arrayIndex,
+      arrayIndex,
+      values,
+      isBlank: values.every((v) => v === null || v === undefined || v === ""),
+    }));
+
+    if (allRows.every((r) => r.isBlank)) {
+      worksheets.push({
+        name: sheetName,
+        detectedType: "chart",
+        detectedTypeLabel: "Chart / Presentation Data (skip)",
+        detectedTypeConfidence: "high",
+        detectedHeaderExcelRow: startExcelRow,
+        detectedHeaderConfidence: "low",
+        preamble: [],
+        headers: [],
+        sampleRows: [],
+        totalDataRows: 0,
+        columns: [],
+        isEmpty: true,
+      });
+      continue;
+    }
+
+    // ── Detect the actual tabular header row ──────────────────────────────────
+    const { headerRow, preambleRows, confidence: headerConfidence } =
+      detectHeaderRow(allRows);
+
+    // Normalise header cell values to strings (year-number columns → "2021" etc.).
+    const headerValues = headerRow.values.map((h) =>
+      h !== null && h !== undefined ? String(h).trim() : null
+    );
+
+    // Data rows = non-blank rows strictly after the detected header row.
+    const dataRows = allRows
+      .filter((r) => r.arrayIndex > headerRow.arrayIndex && !r.isBlank)
+      .map((r) => r.values as (string | number | boolean | null)[]);
+
     const sampleRows = dataRows.slice(0, 5);
     const totalDataRows = dataRows.length;
 
-    // Detect worksheet type
+    // Preamble rows (non-blank only) preserved as worksheet provenance metadata.
+    const preamble = preambleRows
+      .filter((r) => !r.isBlank)
+      .map((r) => ({
+        excelRow: r.excelRow,
+        raw: r.values
+          .filter((v) => v !== null && v !== undefined && v !== "")
+          .map((v) => String(v)),
+      }));
+
+    // ── Worksheet-type detection ──────────────────────────────────────────────
     const { type, label, confidence } = detectWorksheetType(sheetName);
 
-    // Build column metadata
-    const columns: ParsedColumn[] = headerRow.map((header, idx) => {
+    // ── Column metadata ───────────────────────────────────────────────────────
+    const columns: ParsedColumn[] = headerValues.map((header, idx) => {
       const h = header ?? `Column_${idx + 1}`;
       const sampleValues = sampleRows.map((row) => row[idx] ?? null);
       const allNull = sampleValues.every((v) => v === null || v === "");
@@ -295,7 +471,10 @@ function parseWorkbook(filePath: string, fileExt: string): {
       detectedType: type,
       detectedTypeLabel: label,
       detectedTypeConfidence: confidence,
-      headers: headerRow,
+      detectedHeaderExcelRow: headerRow.excelRow,
+      detectedHeaderConfidence: headerConfidence,
+      preamble,
+      headers: headerValues,
       sampleRows,
       totalDataRows,
       columns,
@@ -540,6 +719,88 @@ router.post("/:jobId/classify", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[ingestion/classify]", err);
     return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+// ── POST /api/admin/ingestion/:jobId/reparse — re-parse stored source file ────
+// Re-runs the parser against the already-stored file without requiring a
+// re-upload.  Updates parsed_structure and total_rows in-place.
+// Useful after parser improvements to re-classify a real workbook.
+// Does NOT commit any production records.
+
+router.post("/:jobId/reparse", requireAdmin, async (req, res) => {
+  try {
+    const job = await queryOne<{
+      id: number;
+      file_path: string;
+      file_type: string;
+      status: string;
+    }>(
+      "SELECT id, file_path, file_type, status FROM ingestion_jobs WHERE id = $1",
+      [req.params.jobId]
+    );
+    if (!job) return res.status(404).json({ ok: false, error: "Job not found." });
+    if (job.status === "complete" || job.status === "cancelled") {
+      return res.status(409).json({
+        ok: false,
+        error: `Cannot reparse a ${job.status} job.`,
+      });
+    }
+
+    const filePath = (job as Record<string, unknown>).file_path as string;
+    const fileType = (job as Record<string, unknown>).file_type as string;
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({
+        ok: false,
+        error:
+          "Source file is no longer on disk. Please re-upload the original file.",
+      });
+    }
+
+    let parsedResult: ReturnType<typeof parseWorkbook>;
+    try {
+      parsedResult = parseWorkbook(filePath, `.${fileType}`);
+    } catch (parseErr) {
+      return res.status(422).json({
+        ok: false,
+        error: `Re-parse failed: ${(parseErr as Error).message}`,
+      });
+    }
+
+    const { worksheets } = parsedResult;
+    const totalDataRows = worksheets.reduce((sum, ws) => sum + ws.totalDataRows, 0);
+
+    await query(
+      `UPDATE ingestion_jobs
+       SET parsed_structure = $1, total_rows = $2, status = 'preview'
+       WHERE id = $3`,
+      [JSON.stringify({ worksheets }), totalDataRows, (job as Record<string, unknown>).id]
+    );
+
+    return res.json({
+      ok: true,
+      data: {
+        jobId: (job as Record<string, unknown>).id,
+        totalWorksheets: worksheets.length,
+        totalDataRows,
+        worksheets: worksheets.map((ws) => ({
+          name: ws.name,
+          detectedType: ws.detectedType,
+          detectedTypeLabel: ws.detectedTypeLabel,
+          detectedTypeConfidence: ws.detectedTypeConfidence,
+          detectedHeaderExcelRow: ws.detectedHeaderExcelRow,
+          detectedHeaderConfidence: ws.detectedHeaderConfidence,
+          preambleRowCount: ws.preamble.length,
+          totalDataRows: ws.totalDataRows,
+          columnCount: ws.columns.length,
+          isEmpty: ws.isEmpty,
+        })),
+      },
+    });
+  } catch (err) {
+    console.error("[ingestion/reparse]", err);
+    return res.status(500).json({ ok: false, error: "Server error during re-parse." });
   }
 });
 

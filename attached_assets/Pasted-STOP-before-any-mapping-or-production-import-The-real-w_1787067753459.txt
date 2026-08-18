@@ -1,0 +1,50 @@
+STOP before any mapping or production import.
+
+The real workbook exposed a parser problem in the Payroll & CBT History worksheet.
+
+DiamondIQ is incorrectly treating the worksheet title row:
+
+"MLB Club CBT (Luxury Tax) Payrolls, 2021-2026"
+
+as the column-header row.
+
+As a result, the real table headers are being returned as sample data and the interface is generating fake headers such as Column_2, Column_3, etc.
+
+From the actual Ingestion Review preview, the real table header row contains values including:
+
+Club
+2021
+2022
+2023
+2024
+2025
+2026
+5-Yr Avg
+5-Yr CAGR
+
+This workbook therefore contains preamble/title/source rows above the actual tabular header.
+
+Fix the XLSX parser generically so it can detect the actual header row within each worksheet instead of assuming the first non-empty row is always the header.
+
+Requirements:
+
+- Preserve all pre-header/title/source/methodology rows as worksheet metadata/provenance.
+- Detect the most likely actual tabular header row.
+- Do not discard the original Excel row numbers.
+- Show the detected header-row number in Admin Ingestion Review.
+- Allow OSM Admin to override the detected header row if necessary.
+- Reparse the REAL uploaded Job #3 workbook after implementing this.
+- Do not require me to upload it again if the immutable source file is already stored.
+- Do not create fake Column_2/Column_3 mappings when a legitimate header row exists lower in the worksheet.
+- Do not build Stage 5.
+- Do not commit any production records.
+
+Also correct the destination-schema issue exposed by this real workbook:
+
+Payroll & CBT History is CLUB-LEVEL historical financial data. It must NOT map to draft_players.
+
+Do not force club payroll/CBT history into an existing incompatible table. Propose/create the appropriate normalized club financial history schema as part of the ingestion architecture.
+
+After fixing the parser, re-run Job #3 and show me the detected worksheets, detected header row for each sheet, actual column names, row counts, and proposed destination tables.
+
+Stop there for OSM review.

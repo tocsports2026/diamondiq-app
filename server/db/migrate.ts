@@ -60,5 +60,62 @@ export async function runMigrations() {
     })]);
   }
 
+  // ── club_payroll_history and club_draft_spend_history ──────────────────────
+  // These tables live in schema.sql but are guarded here for environments
+  // where the schema was initialised before these tables were added.
+  await query(`
+    CREATE TABLE IF NOT EXISTS club_payroll_history (
+      id SERIAL PRIMARY KEY,
+      dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+      source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+      source_row INTEGER,
+      source_worksheet TEXT,
+      mlb_org TEXT NOT NULL,
+      season INTEGER NOT NULL,
+      total_payroll NUMERIC,
+      cbt_threshold NUMERIC,
+      cbt_overage NUMERIC,
+      luxury_tax_paid NUMERIC,
+      payroll_rank INTEGER,
+      payroll_data_type TEXT NOT NULL DEFAULT 'actual'
+        CHECK (payroll_data_type IN ('actual', 'preliminary', 'projected')),
+      source_provider TEXT,
+      import_date TIMESTAMP NOT NULL DEFAULT NOW(),
+      verification_status TEXT NOT NULL DEFAULT 'unverified'
+        CHECK (verification_status IN ('unverified', 'osm_reviewed', 'cross_verified')),
+      conflict_flag BOOLEAN NOT NULL DEFAULT FALSE,
+      approved_record_id INTEGER REFERENCES club_payroll_history(id) ON DELETE SET NULL,
+      osm_notes TEXT,
+      is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
+      UNIQUE (mlb_org, season, source_file_version_id)
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS club_draft_spend_history (
+      id SERIAL PRIMARY KEY,
+      dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+      source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+      source_row INTEGER,
+      source_worksheet TEXT,
+      mlb_org TEXT NOT NULL,
+      draft_year INTEGER NOT NULL,
+      total_draft_spend NUMERIC,
+      pool_allotment NUMERIC,
+      over_under_pool NUMERIC,
+      penalty_incurred BOOLEAN,
+      picks_forfeited BOOLEAN,
+      source_provider TEXT,
+      import_date TIMESTAMP NOT NULL DEFAULT NOW(),
+      verification_status TEXT NOT NULL DEFAULT 'unverified'
+        CHECK (verification_status IN ('unverified', 'osm_reviewed', 'cross_verified')),
+      conflict_flag BOOLEAN NOT NULL DEFAULT FALSE,
+      approved_record_id INTEGER REFERENCES club_draft_spend_history(id) ON DELETE SET NULL,
+      osm_notes TEXT,
+      is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
+      UNIQUE (mlb_org, draft_year, source_file_version_id)
+    )
+  `);
+
   console.log("Database migrations complete.");
 }
