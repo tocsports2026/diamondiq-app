@@ -1,0 +1,22 @@
+DiamondIQ GitHub Handoff v2
+
+AUTHORITATIVE DOCS:
+- docs/DIAMONDIQ_MASTER_SPEC.md
+- docs/DIAMONDIQ_ADDENDUM_v1_NAV_AND_DRAFT_REPORT.md
+
+OFFICIAL BRAND ASSET:
+- assets/branding/TOC_White_OFFICIAL.png
+
+CORRECTED VISUAL REFERENCES:
+- assets/references/01_Home.png
+- assets/references/02_Ask_DiamondIQ.png
+- assets/references/03_Draft_Research_Workspace.png
+- assets/references/04_NIL_Intelligence_Research_Workspace.png
+- assets/references/05_Club_Draft_Research_Workspace.png
+- assets/references/06_Draft_Intelligence_Report.png
+- assets/references/07_NIL_Intelligence_Report.png
+- assets/references/08_Club_Draft_Payment_Intelligence_Report.png
+- assets/references/09_My_Reports.png
+- assets/references/10_Knowledge_Center.png
+- assets/references/11_Athlete_Profile.png
+- assets/references/12_NIL_Marketing_Management.png
