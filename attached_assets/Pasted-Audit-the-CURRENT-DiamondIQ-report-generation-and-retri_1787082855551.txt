@@ -1,0 +1,112 @@
+Audit the CURRENT DiamondIQ report-generation and retrieval path now that the production research database is populated.
+
+DO NOT make code changes yet.
+
+The purpose of this audit is to determine exactly what remains between the current state and a real evidence-based user test.
+
+Current production research now includes:
+
+STRUCTURED DATA
+- club_payroll_history
+- club_draft_spend_history
+- derived_metrics
+- osm_research_findings
+- diamondiq_inferences
+- league_facts
+- draft_players / slot_values if Job #5 has been committed
+- provenance / source assertions / derivations
+
+RESEARCH CORPUS
+- 27 osm_articles
+- 6,858 osm_article_transcription_lines
+- page/line/source provenance
+- transcription lines classified as external_source_content
+
+DATA-FIRST REQUIREMENT
+
+When an athlete or OSM user asks DiamondIQ a baseball intelligence question, the system must:
+
+1. Search the relevant structured production data first.
+2. Search the relevant article/research corpus when useful.
+3. Preserve distinctions between:
+   - verified factual records
+   - derived/calculated metrics
+   - OSM proprietary findings
+   - external source content
+   - source-authored opinion/ranking/projection
+   - DiamondIQ-generated inference
+4. Cite the evidence used.
+5. Clearly identify missing evidence/data gaps.
+6. Never silently use model knowledge to fill missing baseball facts.
+7. Generate DiamondIQ analysis only AFTER retrieving the available evidence.
+
+AUDIT THE ACTUAL CURRENT CODE PATH.
+
+Report:
+
+A. What endpoint/function currently receives an athlete research/report request?
+
+B. What code currently generates the report content?
+
+C. Which production database tables does that code actually query today?
+
+D. Does it currently query:
+- club_payroll_history
+- club_draft_spend_history
+- derived_metrics
+- osm_research_findings
+- league_facts
+- draft_players
+- slot_values
+- osm_articles
+- osm_article_transcription_lines
+
+For each table, answer YES/NO and identify the code path.
+
+E. Does the current report engine perform semantic/text search over article transcription content?
+If yes, explain how.
+If no, say exactly what is missing.
+
+F. Does it currently assemble source citations/provenance into report claims?
+If yes, explain how.
+If no, identify the missing connection.
+
+G. Does any current path still:
+- return fixture data
+- return static hard-coded content
+- use buildInitialContent placeholders
+- generate fabricated numbers
+- rely on model/general AI knowledge instead of the production research database
+
+Identify every such path.
+
+H. Does the current athlete-visible report lifecycle still correctly enforce:
+request → generation → OSM review → publish → athlete-visible
+
+I. Identify the MINIMUM development work required before we can run one real end-to-end test question using production research data.
+
+J. Give me a simple readiness verdict:
+
+READY NOW
+or
+ONE INTEGRATION STEP AWAY
+or
+MULTIPLE MAJOR PIECES MISSING
+
+Explain why in no more than 10 bullets.
+
+K. Recommend ONE first live test question that would exercise:
+- structured database retrieval
+- article corpus retrieval
+- provenance/citations
+- evidence classification
+- OSM review gating
+
+Use a topic actually supported by the loaded data.
+
+STOP AFTER THE AUDIT.
+
+Do not change code.
+Do not redesign architecture.
+Do not add new dashboards or features.
+Do not build anything until I explicitly approve the minimum integration work.
