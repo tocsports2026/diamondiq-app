@@ -99,9 +99,28 @@ function detectWorksheetType(sheetName: string): {
 
 // ── Column-level evidence detection ──────────────────────────────────────────
 
+// Evidence-First safeguard: ANY header that implies a model output, projection,
+// or signability estimate must NEVER auto-classify as Verified Public Information.
+// Add new patterns here; do NOT remove existing ones.
 const PROJECTION_HEADER_PATTERNS = [
-  /project/i, /forecast/i, /estim/i, /predict/i, /model/i,
-  /likely/i, /probability/i, /expected/i, /hypothetical/i,
+  // Projection / forecast
+  /project/i, /forecast/i, /predict/i, /hypothetical/i,
+  // Estimation (full word variants — "estim" alone caught separately below)
+  /estimat/i,
+  // Probability / likelihood — note: "likely" ≠ "likelihood", so both are listed
+  /probability/i, /probab/i,
+  /likelihood/i, /likely/i,
+  // Signability and signing-probability concepts
+  /signab/i,           // signability, signable
+  /sign.*lik/i,        // signing likelihood, sign likelihood
+  /lik.*sign/i,        // likelihood to sign, likelihood of signing
+  /prob.*sign/i,       // probability to sign
+  /sign.*prob/i,       // signing probability
+  /to\s+sign/i,        // "likelihood to sign", "expected to sign"
+  // Expected outcome
+  /expected\s+outcome/i, /expected/i,
+  // Other model/inference indicators
+  /model/i, /infer/i, /scenario/i,
 ];
 
 const CALCULATED_HEADER_PATTERNS = [
@@ -110,7 +129,23 @@ const CALCULATED_HEADER_PATTERNS = [
   /trend/i, /index/i,
 ];
 
+// OSM internal/proprietary notes — always labelled OSM Proprietary Data.
+const OSM_PROPRIETARY_PATTERNS = [
+  /osm\s*notes?/i,          // "OSM Notes", "OSM Note"
+  /osm\s*comment/i,         // "OSM Comments"
+  /osm\s*remark/i,          // "OSM Remarks"
+  /internal\s*notes?/i,     // "Internal Notes"
+  /internal\s*comment/i,
+  /proprietary/i,
+  /agent\s*notes?/i,        // "Agent Notes"
+  /scout\s*notes?/i,        // "Scout Notes"
+];
+
 function detectColumnEvidenceLabel(header: string): string {
+  // OSM proprietary check runs FIRST — before projection/calculated checks.
+  if (OSM_PROPRIETARY_PATTERNS.some((p) => p.test(header))) {
+    return "OSM Proprietary Data";
+  }
   if (PROJECTION_HEADER_PATTERNS.some((p) => p.test(header))) {
     return "DiamondIQ Analysis / Inference";
   }
@@ -148,6 +183,8 @@ const CANONICAL_FIELD_HINTS: Array<{ patterns: RegExp[]; field: string; table: s
   // slot_values table
   { patterns: [/slot\s*val/i, /^slot\s*\$/i], field: "slot_value_usd", table: "slot_values" },
   { patterns: [/pick\s*#?$/i, /pick\s*overall/i], field: "pick_overall", table: "slot_values" },
+  // OSM proprietary notes — prefer osm_notes over generic notes wherever schema supports it
+  { patterns: [/osm\s*notes?/i, /osm\s*comment/i, /osm\s*remark/i, /internal\s*notes?/i, /agent\s*notes?/i, /scout\s*notes?/i], field: "osm_notes", table: "draft_players" },
 ];
 
 function suggestCanonicalField(header: string): { field: string; table: string } | null {
@@ -178,6 +215,7 @@ interface ParsedColumn {
   index: number;
   header: string;
   detectedEvidenceLabel: string;
+  defaultSkip: boolean;   // true when evidence is "DiamondIQ Analysis / Inference"
   suggestedCanonicalField: string | null;
   suggestedTable: string | null;
   sampleValues: (string | number | boolean | null)[];
@@ -239,10 +277,12 @@ function parseWorkbook(filePath: string, fileExt: string): {
       const sampleValues = sampleRows.map((row) => row[idx] ?? null);
       const allNull = sampleValues.every((v) => v === null || v === "");
       const suggestion = suggestCanonicalField(h);
+      const evidenceLabel = detectColumnEvidenceLabel(h);
       return {
         index: idx,
         header: h,
-        detectedEvidenceLabel: detectColumnEvidenceLabel(h),
+        detectedEvidenceLabel: evidenceLabel,
+        defaultSkip: evidenceLabel === "DiamondIQ Analysis / Inference",
         suggestedCanonicalField: suggestion?.field ?? null,
         suggestedTable: suggestion?.table ?? null,
         sampleValues,
