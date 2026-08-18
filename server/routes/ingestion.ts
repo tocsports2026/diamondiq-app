@@ -1305,6 +1305,181 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
       return XLSX.utils.sheet_to_json<(string|number|boolean|null)[]>(ws, { header: 1, defval: null });
     }
 
+    // ── ARTICLE TRANSCRIPTION COMMIT PATH ────────────────────────────────────
+    // Detected by presence of "SOURCE INDEX" sheet.
+    // Stores 27 osm_articles records + 6,858 transcription lines.
+    // Does NOT create club-level canonical facts or DiamondIQ inferences.
+    if (wb.SheetNames.includes("SOURCE INDEX")) {
+      await client.query("BEGIN");
+
+      // ── Publisher inference from PDF filename (filename-only, no model knowledge) ──
+      function inferPublisher(pdfFilename: string): string | null {
+        const f = pdfFilename.toLowerCase();
+        if (f.includes("baseball america")) return "Baseball America";
+        if (f.includes("perfect game"))     return "Perfect Game";
+        if (f.includes("d1baseball") || f.includes("d1base")) return "D1Baseball";
+        if (f.includes("usa baseball"))     return "USA Baseball";
+        if (f.includes("npi_") || f.startsWith("npi"))       return "NPI";
+        if (f.includes("prepbaseballreport") || f.includes("prep baseball")) return "Prep Baseball Report";
+        return null; // leave NULL for unidentifiable publishers
+      }
+
+      // ── Scan transcription for URL and publication date ───────────────────
+      function extractUrlAndDate(rows: (string|number|boolean|null)[][]): { url: string|null; pubDate: string|null } {
+        let url: string|null = null;
+        let pubDate: string|null = null;
+        // Date patterns: "Jun 26, 2026", "May 20, 2026", "June 17, 2026"
+        const dateRe = /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+20\d\d\b/i;
+        // Publication date must NOT be a scrape/access timestamp ("8/14/26" style or "8/18/26, 2:42 PM" style)
+        const scrapeDateRe = /^\s*\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d/;
+
+        for (const row of rows) {
+          const text = String(row[2] ?? "").trim();
+          if (!text) continue;
+          // URL: look for https lines
+          const urlMatch = text.match(/https?:\/\/[^\s]+/);
+          if (urlMatch) url = urlMatch[0].replace(/\s+/g, ""); // collapse extraction spaces
+          // Publication date
+          if (!pubDate && !scrapeDateRe.test(text)) {
+            const dm = text.match(dateRe);
+            if (dm) pubDate = dm[0].replace(/\s+/g, " ").trim();
+          }
+        }
+        return { url, pubDate };
+      }
+
+      // ── Parse SOURCE INDEX ────────────────────────────────────────────────
+      const idxRows = sheetRows("SOURCE INDEX"); // R1 = header, R2+ = data
+      // Build map: worksheetName → { sourceNum, pdfFilename, pdfPages, status, method }
+      interface SrcMeta { sourceNum: number; pdfFilename: string; pdfPages: number; worksheet: string; }
+      const srcIndex = new Map<string, SrcMeta>();
+      for (let ri = 1; ri < idxRows.length; ri++) { // skip header at ri=0
+        const row = idxRows[ri];
+        const sourceNum  = row[0];
+        const pdfFile    = row[1];
+        const wsName     = row[2];
+        const pdfPages   = row[3];
+        if (!sourceNum || !pdfFile || !wsName) continue;
+        srcIndex.set(String(wsName).trim(), {
+          sourceNum:  Number(sourceNum),
+          pdfFilename: String(pdfFile).trim(),
+          pdfPages:   Number(pdfPages) || 0,
+          worksheet:  String(wsName).trim(),
+        });
+      }
+
+      let articlesCreated = 0;
+      let linesInserted   = 0;
+      let linesSkipped    = 0;
+      let pubNullCount    = 0;
+      let dateNullCount   = 0;
+
+      // ── Process each article sheet ────────────────────────────────────────
+      for (const sheetName of wb.SheetNames) {
+        if (sheetName === "SOURCE INDEX") continue;
+
+        const meta = srcIndex.get(sheetName.trim());
+        const allRows = sheetRows(sheetName);
+        // Content rows start at index 4 (R5); R1-R4 are metadata/header
+        const contentRows = allRows.slice(4);
+
+        // R1: SOURCE PDF / SOURCE #
+        const srcPdfFromSheet = String(allRows[0]?.[1] ?? "").trim() || meta?.pdfFilename || null;
+        const srcNumFromSheet = allRows[0]?.[3] !== null ? Number(allRows[0]?.[3]) : (meta?.sourceNum ?? null);
+        const pdfPages = meta?.pdfPages ?? (allRows[1]?.[3] !== null ? Number(allRows[1]?.[3]) : null);
+
+        const pdfFilename = srcPdfFromSheet || meta?.pdfFilename || null;
+        const publisher   = pdfFilename ? inferPublisher(pdfFilename) : null;
+        if (!publisher) pubNullCount++;
+
+        // Extract URL and publication date from transcription content
+        const { url, pubDate } = extractUrlAndDate(contentRows);
+        if (!pubDate) dateNullCount++;
+
+        // Parse publication date to ISO string for PostgreSQL DATE column
+        let pubDateIso: string | null = null;
+        if (pubDate) {
+          const parsed = new Date(pubDate);
+          if (!isNaN(parsed.getTime())) pubDateIso = parsed.toISOString().slice(0, 10);
+        }
+
+        // Article title: use PDF filename stripped of extension as the title
+        const title = pdfFilename
+          ? pdfFilename.replace(/\.pdf$/i, "").trim()
+          : sheetName.trim();
+
+        // Insert osm_articles record
+        const artResult = await client.query<{ id: number }>(
+          `INSERT INTO osm_articles
+             (dataset_id, source_file_version_id, ingestion_job_id,
+              title, publisher, source_url, publication_date,
+              evidence_class, verification_status, is_fixture,
+              source_number, pdf_filename, pdf_page_count, source_worksheet)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'verified_public','unverified',FALSE,$8,$9,$10,$11)
+           RETURNING id`,
+          [
+            datasetId, sfvId, jobId,
+            title, publisher, url, pubDateIso,
+            srcNumFromSheet, pdfFilename, pdfPages, sheetName.trim(),
+          ]
+        );
+        const articleId = artResult.rows[0].id;
+        articlesCreated++;
+
+        // Insert transcription lines (R5+ where col C is non-empty)
+        for (let ri = 0; ri < contentRows.length; ri++) {
+          const row = contentRows[ri];
+          const lineText = String(row[2] ?? "").trim();
+          if (!lineText) { linesSkipped++; continue; }
+
+          const pdfPage = row[0] !== null && row[0] !== "" ? Number(row[0]) : null;
+          const pdfLine = row[1] !== null && row[1] !== "" ? Number(row[1]) : null;
+          if (pdfPage === null || pdfLine === null) { linesSkipped++; continue; }
+
+          const excelRow = ri + 5; // R5 = index 0 of contentRows
+
+          await client.query(
+            `INSERT INTO osm_article_transcription_lines
+               (article_id, source_file_version_id, ingestion_job_id,
+                source_excel_row, pdf_page, pdf_line, line_text,
+                evidence_class, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'external_source_content',FALSE)`,
+            [articleId, sfvId, jobId, excelRow, pdfPage, pdfLine, lineText]
+          );
+          linesInserted++;
+        }
+      }
+
+      // ── Update job status ─────────────────────────────────────────────────
+      await client.query(
+        `UPDATE ingestion_jobs SET status='complete', completed_at=NOW(), rows_imported=$1 WHERE id=$2`,
+        [articlesCreated + linesInserted, jobId]
+      );
+      await client.query(
+        `UPDATE data_library SET processing_status='ready', last_import_at=NOW() WHERE id=$1`,
+        [datasetId]
+      );
+
+      await client.query("COMMIT");
+
+      return res.json({
+        ok: true,
+        data: {
+          jobId,
+          status: "complete",
+          mode: "article_transcription",
+          articlesCreated,
+          transcriptionLinesPreserved: linesInserted,
+          linesSkipped,
+          publisherNullCount: pubNullCount,
+          publicationDateNullCount: dateNullCount,
+          canonicalBaseballFactsCreated: 0,
+          diamondIQInferencesCreated: 0,
+        },
+      });
+    }
+    // ── END ARTICLE TRANSCRIPTION PATH ────────────────────────────────────────
+
     // Get preamble text (rows 0-1 = Excel rows 1-2)
     function getPreamble(name: string): string {
       const rows = sheetRows(name);

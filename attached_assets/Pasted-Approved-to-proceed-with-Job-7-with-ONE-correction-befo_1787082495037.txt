@@ -1,0 +1,71 @@
+Approved to proceed with Job #7, with ONE correction before implementation.
+
+The overall bulk-ingestion plan is approved:
+- SOURCE INDEX = metadata/provenance only
+- 27 osm_articles records
+- preserve all 6,858 non-empty transcription lines
+- create osm_article_transcription_lines
+- add the four proposed provenance columns to osm_articles
+- preserve the original transcription verbatim
+- retain page/line/workbook provenance
+- do not create canonical facts during this ingestion
+- do not create DiamondIQ inference during this ingestion
+- do not overwrite Jobs #3/#4
+- leave missing information NULL rather than infer it
+
+CORRECTION:
+
+Do NOT classify every raw transcription line as `verified_public`.
+
+These are verbatim statements from published external sources, but the content may contain:
+- reported factual information
+- rankings
+- scouting evaluations
+- projections
+- mock drafts
+- estimates
+- opinions
+- analysis
+
+The ingestion layer should therefore distinguish SOURCE PROVENANCE from CLAIM EVIDENCE CLASSIFICATION.
+
+For osm_article_transcription_lines, store the line as externally sourced/raw source material without asserting that the statement itself is a verified fact.
+
+Use a neutral source-content classification such as:
+`external_source_content`
+
+If the existing evidence_class constraint/schema requires a different implementation, make the smallest necessary change to support this distinction.
+
+The article record may identify the publication as a public/external source, but that must NOT cause every statement inside the article to become a Verified Public Information fact.
+
+Later DiamondIQ processing can extract individual claims from these source lines and classify each claim appropriately as factual information, source-authored analysis/opinion, ranking, projection, etc.
+
+For the two unidentified publishers (#4 and #13):
+- leave publisher NULL unless the publisher is explicitly identifiable from the transcribed source itself
+- do not infer it from model knowledge
+
+For publication dates:
+- populate only when explicitly identifiable from the source transcription
+- otherwise NULL
+- do not treat scrape/access timestamps as publication dates
+
+Proceed with the minimal schema additions and Job #7 commit.
+
+After commit, STOP and report only:
+
+1. Job #7 status
+2. osm_articles records created (expected 27)
+3. transcription lines preserved (expected 6,858)
+4. lines skipped and exact reasons
+5. publisher NULL count
+6. publication_date NULL count
+7. confirmation all 27 articles retain source-number/PDF/worksheet provenance
+8. confirmation page + line provenance is preserved
+9. confirmation ZERO canonical baseball facts were generated from article text
+10. confirmation ZERO DiamondIQ inferences were generated
+11. confirmation no article-authored opinion/projection/ranking was automatically promoted to verified factual information
+12. any ingestion errors
+
+Do not build search, report generation, claim extraction, dashboards, new workflows, or any additional features yet.
+
+The immediate objective remains completing ingestion of the research library accurately before we work on how DiamondIQ uses it.

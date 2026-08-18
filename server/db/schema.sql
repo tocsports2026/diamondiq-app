@@ -742,6 +742,26 @@ CREATE TABLE IF NOT EXISTS osm_article_annotations (
   is_fixture BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+-- Verbatim per-line transcription of an external PDF source.
+-- evidence_class = 'external_source_content' — the raw transcribed text is
+-- attributed to the external source; it has NOT been validated as a verified fact.
+-- Later DiamondIQ processing extracts individual claims and classifies each one.
+CREATE TABLE IF NOT EXISTS osm_article_transcription_lines (
+  id                     SERIAL PRIMARY KEY,
+  article_id             INTEGER NOT NULL REFERENCES osm_articles(id) ON DELETE CASCADE,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  ingestion_job_id       INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+  source_excel_row       INTEGER NOT NULL,   -- workbook row for full traceability
+  pdf_page               INTEGER NOT NULL,   -- page number from the source PDF
+  pdf_line               INTEGER NOT NULL,   -- line number within that page
+  line_text              TEXT NOT NULL,      -- verbatim transcribed text
+  evidence_class         TEXT NOT NULL DEFAULT 'external_source_content'
+    CHECK (evidence_class = 'external_source_content'),
+  is_fixture             BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_transcription_lines_article ON osm_article_transcription_lines (article_id);
+CREATE INDEX IF NOT EXISTS idx_transcription_lines_job    ON osm_article_transcription_lines (ingestion_job_id);
+
 -- ============================================================
 -- RECORD SOURCE ASSERTIONS
 -- ============================================================

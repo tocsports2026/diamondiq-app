@@ -448,6 +448,33 @@ export async function runMigrations() {
   await query(`CREATE INDEX IF NOT EXISTS idx_league_facts_job
     ON league_facts (ingestion_job_id)`);
 
+  // ── 6d. osm_article_transcription_lines + provenance cols on osm_articles ──
+  await query(`
+    CREATE TABLE IF NOT EXISTS osm_article_transcription_lines (
+      id                     SERIAL PRIMARY KEY,
+      article_id             INTEGER NOT NULL REFERENCES osm_articles(id) ON DELETE CASCADE,
+      source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+      ingestion_job_id       INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+      source_excel_row       INTEGER NOT NULL,
+      pdf_page               INTEGER NOT NULL,
+      pdf_line               INTEGER NOT NULL,
+      line_text              TEXT NOT NULL,
+      evidence_class         TEXT NOT NULL DEFAULT 'external_source_content'
+        CHECK (evidence_class = 'external_source_content'),
+      is_fixture             BOOLEAN NOT NULL DEFAULT FALSE
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_transcription_lines_article
+    ON osm_article_transcription_lines (article_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_transcription_lines_job
+    ON osm_article_transcription_lines (ingestion_job_id)`);
+
+  // Four SOURCE INDEX provenance columns on osm_articles
+  await query(`ALTER TABLE osm_articles ADD COLUMN IF NOT EXISTS source_number    INTEGER`);
+  await query(`ALTER TABLE osm_articles ADD COLUMN IF NOT EXISTS pdf_filename     TEXT`);
+  await query(`ALTER TABLE osm_articles ADD COLUMN IF NOT EXISTS pdf_page_count   INTEGER`);
+  await query(`ALTER TABLE osm_articles ADD COLUMN IF NOT EXISTS source_worksheet TEXT`);
+
   // ── 7. report_citations: add evidence_layer + methodology columns ──────────
   await query(`ALTER TABLE report_citations
     ADD COLUMN IF NOT EXISTS evidence_layer INTEGER
