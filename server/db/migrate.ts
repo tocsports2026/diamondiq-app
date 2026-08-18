@@ -398,6 +398,29 @@ export async function runMigrations() {
     )
   `);
 
+  // ── 6b. record_source_assertions ──────────────────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS record_source_assertions (
+      id                        SERIAL PRIMARY KEY,
+      canonical_record_table    TEXT NOT NULL,
+      canonical_record_id       INTEGER NOT NULL,
+      source_file_version_id    INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+      ingestion_job_id          INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+      worksheet                 TEXT NOT NULL,
+      excel_row                 INTEGER,
+      excel_column              TEXT,
+      source_preamble           TEXT,
+      asserted_value            TEXT,
+      conflicts_with_canonical  BOOLEAN NOT NULL DEFAULT FALSE,
+      conflict_delta            TEXT,
+      created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_rsa_canonical
+    ON record_source_assertions (canonical_record_table, canonical_record_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_rsa_job
+    ON record_source_assertions (ingestion_job_id)`);
+
   // ── 7. report_citations: add evidence_layer + methodology columns ──────────
   await query(`ALTER TABLE report_citations
     ADD COLUMN IF NOT EXISTS evidence_layer INTEGER

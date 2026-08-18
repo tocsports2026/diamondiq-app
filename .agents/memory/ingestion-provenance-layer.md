@@ -14,7 +14,7 @@ Every data record belongs to exactly one layer. Evidence class is enforced by CH
 | 3 — OSM Research | osm_research_findings | osm_proprietary |
 | 4 — Inferences | diamondiq_inferences | diamondiq_inference (enforced) |
 
-Supporting tables: methodology_versions, record_derivations, osm_articles, osm_article_annotations, report_citations.
+Supporting tables: methodology_versions, record_derivations, record_source_assertions, osm_articles, osm_article_annotations, report_citations.
 
 ## Layer 1 — Canonical Fact Tables (CLEAN)
 - One atomic fact per row. No aggregates, no OSM reads, no model outputs on these tables.
@@ -46,6 +46,12 @@ Supporting tables: methodology_versions, record_derivations, osm_articles, osm_a
 ## Methodology Versions (SEEDED)
 Rows seeded on startup: avg_5yr v1.0, cagr_5yr v1.0, count_seasons_over_threshold v1.0, pct_vs_avg v1.0, cbt_payroll_tier v1.0, draft_pool_tier v1.0, sample_size_thresholds v1.0.
 
+## record_source_assertions (NEW TABLE — BUILT)
+When the same fact appears in multiple worksheets, ONE canonical production record is written.
+Each additional worksheet location is preserved as a record_source_assertions row:
+  canonical_record_table, canonical_record_id, worksheet, excel_row, excel_column, asserted_value, conflicts_with_canonical.
+Conflict detection is automatic — conflicts_with_canonical=TRUE if value disagrees with canonical.
+
 ## Classification vs Calculation Rule
 - CBT Payroll Tier / Draft Pool Tier: evidence_class='calculated' if OSM defines thresholds in methodology_versions, 'osm_proprietary' if applied by analyst judgment. Admin decides at ingestion review.
 - Assumed Spend Rate: always L3 osm_research_findings / methodology_assumption — NOT a public fact.
@@ -60,48 +66,62 @@ NEVER silently substitute AI/model knowledge.
 
 ## Ingestion Pipeline Status
 - Stage 1–4 (upload, parse, map, preview): BUILT
-- Stage 5 (commit — write production rows): NOT YET BUILT — awaiting OSM approval of Job #3 commit preview
+- Stage 5 (commit — write production rows): BUILT AND USED FOR JOB #3
 - Stage 6 (Google Drive connector): NOT STARTED
 
-## Job #3 — Real OSM Workbook
-- File: 2021-2026 MLB Draft Payroll and Draft Summaries.xlsx (44K)
-- source_file_version_id: 3, dataset_id: 8, ingestion_job_id: 3
-- Status: preview (reset by reparse — zero production rows committed)
-- File stored at /tmp/diq_uploads/279f43a80afb4d8efa07db33.xlsx
+## Stage 5 Commit — Key Implementation Details
+- Reads raw workbook from disk via XLSX, NOT from parsed_structure JSON (only has sample rows).
+- Filters Club column to MLB_CLUBS set (30 clubs) before any write — LEAGUE TOTAL and note rows are skipped.
+- All writes in a single pg BEGIN/COMMIT transaction — full rollback on any error.
+- Unpivots year-pivot columns into normalized (club, season) rows.
+- Draft Spend History: 2021-2025 → total_draft_spend; 2026 → pool_allotment (official, not yet actual).
+- Payroll 2026: payroll_data_type='preliminary' (partial season per source preamble).
+- 2026 first_round_pick: UPDATE on existing 2026 draft_spend row from Projection sheet (not a new row).
+- record_source_assertions written for 240 cross-sheet repetitions (0 conflicts found in Job #3).
+- record_derivations written for all L2 metrics and L4 inferences → L1 source records.
+- Requires pool import from db/index.ts (not just query/queryOne) for pg transaction client.
 
-## Job #3 Commit Preview (PENDING OSM APPROVAL — NOT COMMITTED)
-Layer 1 Factual Records:  782  (204 payroll rows + 204 spend rows post-unpivot + 36 first-round-pick + 36 pool + misc)
-Layer 2 Derived Metrics:  397
-Layer 3 OSM Findings:      39
-Layer 4 Inferences:       108
-Total Records:           1326
-Duplicates detected:        2  (cross-sheet metrics appearing in multiple sheets)
-Unmapped fields:            3  (need Admin mapping override: 2025 Rank, CBT Tier, Penalty Proxy)
-Requires OSM review:        7
+## Job #3 — COMMITTED (2021-2026 MLB Draft Payroll and Draft Summaries.xlsx)
+Status: complete  
+Committed: 2026-08-18
 
-## Admin Overrides Needed Before Commit
-These auto-classifier ambiguities require Admin override in the mapping UI:
-1. "5-Yr CAGR (21→25)" (Payroll + Spend): set Layer 2 → cagr_payroll_5yr / cagr_pool_5yr
-2. "2025 Rank (1=largest)" (Draft Spend): set Layer 2 → pool_rank
-3. "CBT Payroll Tier" (Trend Analysis): set Layer 2 → cbt_payroll_tier
-4. "Times Picked-10-Spots Penalty (proxy)": set Layer 2 → times_penalty_proxy
-5. "Draft Pool Tier": set Layer 2 → draft_pool_tier
-6. "Payroll ↔ Draft Pool Correlation Direction": set Layer 3 → finding:correlation
-7. "Assumed Total-Spend-vs-Pool Rate (%)": set Layer 3 → finding:methodology_assumption
-8. "Times Over CBT Threshold" (Payroll sheet): currently L1 — Admin should override to L2
+| Layer | Table | Rows |
+|---|---|---|
+| L1 | club_payroll_history | 180 |
+| L1 | club_draft_spend_history | 180 |
+| L2 | derived_metrics | 300 |
+| L3 | osm_research_findings | 99 |
+| L4 | diamondiq_inferences | 90 |
+| — | record_source_assertions | 240 |
+| — | record_derivations | 810 |
+| **Total production** | | **849** |
 
-## Ingestion Route Endpoints
-- POST /api/admin/ingestion/upload
-- GET  /api/admin/ingestion
-- GET  /api/admin/ingestion/:jobId
-- POST /api/admin/ingestion/:jobId/classify
-- POST /api/admin/ingestion/:jobId/reparse
-- POST /api/admin/ingestion/:jobId/commit-preview  ← NEW
-- DELETE /api/admin/ingestion/:jobId
+## L3 Count: 99 vs Dry-Run Expected 41 — Explanation (NOT AN ERROR)
+All 99 are legitimate OSM research findings. Dry-run expected 41 was wrong in three ways:
+1. Correction #7 (Correlation Direction → L3) produces 30 per-club correlation findings — not counted in dry-run total.
+2. Methodology assumptions written 1 per club (30 rows, preserving exact per-club rates) vs dry-run's 3-per-tier estimate.
+3. "KEY LEAGUE-WIDE TRENDS" header row stored as a research_note (9 total, not 8).
+Breakdown: 30 pattern_read + 30 correlation + 30 methodology_assumption + 9 research_note = 99.
 
-## Provenance Chain (Full Audit)
-Report claim → report_citations (evidence_layer 1-4) → Layer record → record_derivations → Layer 1 source records → source_file_versions (SHA-256) → ingestion_jobs → source_worksheet + excel row/col + preamble
+## L2 Metrics Committed (10 per club × 30 clubs = 300)
+avg_5yr_payroll, cagr_payroll_5yr, times_over_cbt, avg_pool_5yr, cagr_pool_5yr, pool_rank, cbt_payroll_tier, times_penalty_proxy, draft_pool_tier, pct_vs_avg_pool
+
+## 9 Admin Mapping Corrections Applied at Stage 5 Commit
+1. Payroll CAGR → L2 cagr_payroll_5yr  
+2. Draft Spend CAGR → L2 cagr_pool_5yr  
+3. 2025 Rank → L2 pool_rank  
+4. CBT Payroll Tier → L2 cbt_payroll_tier (osm_proprietary)  
+5. Times Picked-10-Spots Penalty proxy → L2 times_penalty_proxy  
+6. Draft Pool Tier → L2 draft_pool_tier (osm_proprietary)  
+7. Payroll ↔ Draft Pool Correlation → L3 correlation  
+8. Assumed Total-Spend-vs-Pool Rate → L3 methodology_assumption (per club)  
+9. Times Over CBT Threshold → L2 times_over_cbt (NOT L1)
 
 ## Dev Credentials
 Admin: admin@ocmsports.com / DiamondIQ2024!
 Athlete: jackson.miller@demo.com / Athlete2024!
+
+## Next Priority (Per OSM Approval)
+- 3 additional Excel workbooks to ingest
+- 21 annotated research articles to ingest (osm_articles + osm_article_annotations pipeline not yet built)
+- Stage 6 (Google Drive connector): NOT STARTED

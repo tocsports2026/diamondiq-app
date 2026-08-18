@@ -1,0 +1,78 @@
+APPROVED. Proceed.
+
+We are done with architecture review for Job #3 unless implementation reveals an actual blocking correctness problem.
+
+Implement the minimum necessary to commit this workbook correctly.
+
+1. Create record_source_assertions as proposed so repeated appearances of the same fact/metric preserve their worksheet provenance without creating duplicate canonical production records.
+
+2. Apply all 9 mapping corrections identified in the corrected dry run:
+
+- Payroll CAGR → L2 cagr_payroll_5yr
+- Draft Spend CAGR → L2 cagr_pool_5yr
+- 2025 Rank → L2 pool_rank
+- CBT Payroll Tier → L2 cbt_payroll_tier
+- Times Picked-10-Spots Penalty proxy → L2 times_penalty_proxy
+- Draft Pool Tier → L2 draft_pool_tier
+- Payroll ↔ Draft Pool Correlation → L3 finding:correlation
+- Assumed Total-Spend-vs-Pool Rate → L3 finding:methodology_assumption
+- Times Over CBT Threshold → L2 times_over_cbt
+
+3. Build Stage 5 commit.
+
+4. Commit Job #3 using the corrected dry-run mappings.
+
+Expected production results from this workbook are approximately:
+
+Layer 1:
+- club_payroll_history: 180
+- club_draft_spend_history: 180
+
+Layer 2:
+- derived_metrics: 300
+
+Layer 3:
+- osm_research_findings: 41
+
+Layer 4:
+- diamondiq_inferences: 90
+
+Total production records: approximately 791
+
+Also preserve approximately 240 repeated source assertions without treating them as additional facts.
+
+Do not treat these expected counts as permission to force the data to match them. If implementation produces materially different counts, STOP and explain the discrepancy rather than manipulating records to reach the expected number.
+
+5. Validate after commit:
+
+- exactly 30 valid MLB organizations represented where expected
+- no league totals stored as MLB clubs
+- no methodology/note rows stored as club facts
+- zero DEV fixture records made athlete-visible
+- repeated facts do not create duplicate canonical records
+- provenance/source assertions are intact
+- zero unresolved mapping fields
+- zero silent conflicts
+- Job #3 status reflects successful committed ingestion
+
+6. Run a small post-commit verification query using several clubs and show that DiamondIQ can retrieve:
+
+- historical payroll
+- historical draft pool
+- a derived metric
+- an OSM research finding
+- a DiamondIQ projection/inference
+
+with the correct evidence class and source provenance.
+
+Then STOP.
+
+Do not spend additional time expanding or redesigning the ingestion architecture.
+
+NEXT PRIORITY IS INGESTION COVERAGE.
+
+After Job #3 is successfully committed and verified, I want to immediately move to the next real Excel workbook from the OSM research archive.
+
+We have 3 additional Excel workbooks and 21 annotated research articles still to ingest.
+
+Do not begin those automatically. After Job #3 verification, tell me it is ready and ask me for the next workbook.

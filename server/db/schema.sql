@@ -743,6 +743,34 @@ CREATE TABLE IF NOT EXISTS osm_article_annotations (
 );
 
 -- ============================================================
+-- RECORD SOURCE ASSERTIONS
+-- ============================================================
+-- When the same verified fact or derived metric appears in multiple worksheets
+-- or source files, ONE canonical production record is written.  Every additional
+-- source location that asserts the same fact is stored here instead of creating
+-- a duplicate canonical row.  Conflicts (asserted value ≠ canonical value) are
+-- flagged automatically at commit time.
+CREATE TABLE IF NOT EXISTS record_source_assertions (
+  id                        SERIAL PRIMARY KEY,
+  canonical_record_table    TEXT NOT NULL,     -- e.g. 'club_draft_spend_history'
+  canonical_record_id       INTEGER NOT NULL,  -- FK to the canonical row (untyped for flexibility)
+  source_file_version_id    INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  ingestion_job_id          INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+  worksheet                 TEXT NOT NULL,
+  excel_row                 INTEGER,
+  excel_column              TEXT,
+  source_preamble           TEXT,
+  asserted_value            TEXT,             -- raw cell value as text
+  conflicts_with_canonical  BOOLEAN NOT NULL DEFAULT FALSE,
+  conflict_delta            TEXT,             -- NULL when values agree
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rsa_canonical
+  ON record_source_assertions (canonical_record_table, canonical_record_id);
+CREATE INDEX IF NOT EXISTS idx_rsa_job
+  ON record_source_assertions (ingestion_job_id);
+
+-- ============================================================
 -- REPORT CITATIONS — full provenance chain for published claims
 -- ============================================================
 -- Links every factual claim in a published report to its source record

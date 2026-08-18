@@ -27,7 +27,7 @@ import fs from "fs";
 import crypto from "crypto";
 import * as XLSX from "xlsx";
 import { requireAdmin, requireStaff } from "../middleware/auth";
-import { query, queryOne } from "../db";
+import pool, { query, queryOne } from "../db";
 
 const router = Router();
 
@@ -1218,6 +1218,924 @@ router.post("/:jobId/reparse", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[ingestion/reparse]", err);
     return res.status(500).json({ ok: false, error: "Server error during re-parse." });
+  }
+});
+
+// ── POST /api/admin/ingestion/:jobId/commit — Stage 5: write production rows ─
+//
+// Reads the raw workbook from disk, filters to valid MLB club rows only,
+// unpivots year-pivot columns, and writes all four evidence layers plus
+// record_source_assertions (cross-sheet provenance) and record_derivations.
+//
+// All writes happen inside a single transaction — the entire commit rolls back
+// on any error.  Zero production records are written until this endpoint succeeds.
+//
+// The 9 Admin-approved mapping corrections for Job #3 are applied here:
+//   1. Payroll CAGR → L2 cagr_payroll_5yr
+//   2. Draft Spend CAGR → L2 cagr_pool_5yr
+//   3. 2025 Rank → L2 pool_rank
+//   4. CBT Payroll Tier → L2 cbt_payroll_tier
+//   5. Times Picked-10-Spots Penalty → L2 times_penalty_proxy
+//   6. Draft Pool Tier → L2 draft_pool_tier
+//   7. Payroll ↔ Draft Pool Correlation → L3 correlation
+//   8. Assumed Total-Spend-vs-Pool Rate → L3 methodology_assumption
+//   9. Times Over CBT Threshold → L2 times_over_cbt (NOT L1)
+
+const MLB_CLUBS = new Set([
+  "Los Angeles Dodgers","New York Mets","New York Yankees","Philadelphia Phillies",
+  "Toronto Blue Jays","San Diego Padres","Boston Red Sox","Houston Astros",
+  "Texas Rangers","Atlanta Braves","Chicago Cubs","San Francisco Giants",
+  "Los Angeles Angels","Arizona Diamondbacks","Seattle Mariners","Detroit Tigers",
+  "Kansas City Royals","Baltimore Orioles","St. Louis Cardinals","Colorado Rockies",
+  "Cincinnati Reds","Milwaukee Brewers","Minnesota Twins","Washington Nationals",
+  "Cleveland Guardians","Athletics","Pittsburgh Pirates","Tampa Bay Rays",
+  "Chicago White Sox","Miami Marlins",
+]);
+
+router.post("/:jobId/commit", requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    // ── 1. Load job ──────────────────────────────────────────────────────────
+    const job = await queryOne<{
+      id: number; status: string; file_path: string; file_type: string;
+      source_file_version_id: number; dataset_id: number;
+    }>(
+      `SELECT ij.id, ij.status, ij.file_path, ij.file_type,
+              ij.source_file_version_id, ij.dataset_id
+       FROM ingestion_jobs ij WHERE ij.id = $1`,
+      [req.params.jobId]
+    );
+    if (!job) return res.status(404).json({ ok: false, error: "Job not found." });
+    if (job.status === "complete")   return res.status(409).json({ ok: false, error: "Job already committed." });
+    if (job.status === "cancelled")  return res.status(409).json({ ok: false, error: "Job is cancelled." });
+
+    const filePath = job.file_path;
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(422).json({ ok: false, error: "Source file not on disk. Please re-upload." });
+    }
+
+    // ── 2. Pre-commit safety check ───────────────────────────────────────────
+    const checks = await Promise.all([
+      queryOne<{n:string}>("SELECT COUNT(*) n FROM club_payroll_history    WHERE is_fixture=FALSE"),
+      queryOne<{n:string}>("SELECT COUNT(*) n FROM club_draft_spend_history WHERE is_fixture=FALSE"),
+      queryOne<{n:string}>("SELECT COUNT(*) n FROM derived_metrics         WHERE is_fixture=FALSE"),
+      queryOne<{n:string}>("SELECT COUNT(*) n FROM osm_research_findings   WHERE is_fixture=FALSE"),
+      queryOne<{n:string}>("SELECT COUNT(*) n FROM diamondiq_inferences    WHERE is_fixture=FALSE"),
+    ]);
+    const safetyNums = checks.map(r => parseInt(r?.n ?? "0"));
+    if (safetyNums.some(n => n > 0)) {
+      return res.status(409).json({
+        ok: false,
+        error: "Safety check failed: production tables are not empty.",
+        counts: {
+          club_payroll_history: safetyNums[0],
+          club_draft_spend_history: safetyNums[1],
+          derived_metrics: safetyNums[2],
+          osm_research_findings: safetyNums[3],
+          diamondiq_inferences: safetyNums[4],
+        },
+      });
+    }
+
+    // ── 3. Methodology version IDs ───────────────────────────────────────────
+    const mvRows = await query<{id:number; name:string}>("SELECT id, name FROM methodology_versions");
+    const mv: Record<string,number> = {};
+    for (const r of mvRows) mv[r.name] = r.id;
+    // mv.avg_5yr, mv.cagr_5yr, mv.count_seasons_over_threshold, mv.pct_vs_avg,
+    // mv.cbt_payroll_tier, mv.draft_pool_tier
+
+    // ── 4. Read workbook ─────────────────────────────────────────────────────
+    const wb = XLSX.readFile(filePath, { type: "file", raw: false });
+    const sfvId  = job.source_file_version_id;
+    const jobId  = job.id;
+    const datasetId = job.dataset_id;
+
+    // Helper: read a sheet's rows starting from array index 4 (after preamble + header at idx 3)
+    function sheetRows(name: string): (string|number|boolean|null)[][] {
+      const ws = wb.Sheets[name];
+      if (!ws) return [];
+      return XLSX.utils.sheet_to_json<(string|number|boolean|null)[]>(ws, { header: 1, defval: null });
+    }
+
+    // Get preamble text (rows 0-1 = Excel rows 1-2)
+    function getPreamble(name: string): string {
+      const rows = sheetRows(name);
+      return [rows[0]?.[0], rows[1]?.[0]]
+        .filter(v => v !== null && v !== undefined && String(v).trim())
+        .map(v => String(v).trim())
+        .join(" | ");
+    }
+
+    const payrollPreamble = getPreamble("Payroll & CBT History");
+    const spendPreamble   = getPreamble("Draft Spend History");
+    const trendPreamble   = getPreamble("Trend Analysis");
+    const projPreamble    = getPreamble("2026 Draft Projection");
+
+    // ── 5. BEGIN TRANSACTION ─────────────────────────────────────────────────
+    await client.query("BEGIN");
+
+    // Track inserted IDs for record_derivations and source_assertions
+    // payrollIds[club][year] = club_payroll_history.id
+    const payrollIds  = new Map<string, Map<number, number>>();
+    // spendIds[club][year] = club_draft_spend_history.id
+    const spendIds    = new Map<string, Map<number, number>>();
+    // l2Ids[`${club}::${metricName}`] = derived_metrics.id
+    const l2Ids       = new Map<string, number>();
+    // l3Ids[`${club}::${findingType}`] = osm_research_findings.id (for correlation findings)
+    const l3Ids       = new Map<string, number>();
+    // l4SpendIds[club] = diamondiq_inferences.id for draft_spend_projection
+    const l4SpendIds  = new Map<string, number>();
+    const l4OverIds   = new Map<string, number>();
+
+    // Counters
+    let l1Payroll = 0, l1Spend = 0, l2Count = 0, l3Count = 0, l4Count = 0, rsaCount = 0, rdCount = 0;
+
+    // ── SHEET 1: Payroll & CBT History ────────────────────────────────────────
+    // Header at array index 3. Data rows from index 4.
+    // Columns: 0=Club, 1=2021, 2=2022, 3=2023, 4=2024, 5=2025, 6=2026,
+    //          7=5-Yr Avg, 8=CAGR, 9=Times Over CBT
+    {
+      const rows = sheetRows("Payroll & CBT History");
+      const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+      const YEAR_COLS = [1, 2, 3, 4, 5, 6];
+
+      for (let ri = 4; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const club = String(row[0] ?? "").trim();
+        if (!MLB_CLUBS.has(club)) continue;
+
+        payrollIds.set(club, new Map());
+
+        // Unpivot: one row per year
+        for (let yi = 0; yi < YEARS.length; yi++) {
+          const year = YEARS[yi];
+          const colIdx = YEAR_COLS[yi];
+          const val = row[colIdx];
+          if (val === null || val === undefined || val === "") continue;
+
+          const payrollAmt = typeof val === "number" ? val : parseFloat(String(val).replace(/[,$]/g,""));
+          if (isNaN(payrollAmt)) continue;
+
+          const dataType = year === 2026 ? "preliminary" : "actual";
+
+          const r = await client.query<{id:number}>(
+            `INSERT INTO club_payroll_history
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_excel_column, source_preamble,
+                mlb_org, season, total_payroll, payroll_data_type,
+                evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'verified_public','unverified',FALSE)
+             RETURNING id`,
+            [datasetId, sfvId, jobId, ri+1, "Payroll & CBT History", String(year), payrollPreamble,
+             club, year, payrollAmt, dataType]
+          );
+          payrollIds.get(club)!.set(year, r.rows[0].id);
+          l1Payroll++;
+        }
+
+        // L2: 5-Yr Avg Payroll (col 7)
+        const avgVal = row[7];
+        if (avgVal !== null && avgVal !== undefined && avgVal !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, numeric_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'avg_5yr_payroll',$2,2021,2025,'2021-2025 (5yr)',
+                     'calculated',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, Number(avgVal), mv["avg_5yr"] ?? null,
+             datasetId, sfvId, jobId, "Payroll & CBT History", ri+1, "5-Yr Avg (21-25)", payrollPreamble]
+          );
+          l2Ids.set(`${club}::avg_5yr_payroll`, r.rows[0].id);
+          l2Count++;
+        }
+
+        // L2: CAGR (col 8) — correction #1: cagr_payroll_5yr
+        const cagrVal = row[8];
+        if (cagrVal !== null && cagrVal !== undefined && cagrVal !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, numeric_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'cagr_payroll_5yr',$2,2021,2025,'2021-2025 (5yr)',
+                     'calculated',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, Number(cagrVal), mv["cagr_5yr"] ?? null,
+             datasetId, sfvId, jobId, "Payroll & CBT History", ri+1, "5-Yr CAGR (21->25)", payrollPreamble]
+          );
+          l2Ids.set(`${club}::cagr_payroll_5yr`, r.rows[0].id);
+          l2Count++;
+        }
+
+        // L2: Times Over CBT Threshold (col 9) — correction #9: L2 not L1
+        const timesVal = row[9];
+        if (timesVal !== null && timesVal !== undefined && timesVal !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, numeric_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'times_over_cbt',$2,2021,2025,'2021-2025 (5yr)',
+                     'calculated',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, Number(timesVal), mv["count_seasons_over_threshold"] ?? null,
+             datasetId, sfvId, jobId, "Payroll & CBT History", ri+1, "Times Over CBT Threshold (21-25)", payrollPreamble]
+          );
+          l2Ids.set(`${club}::times_over_cbt`, r.rows[0].id);
+          l2Count++;
+        }
+      }
+    }
+
+    // ── SHEET 2: Draft Spend History ──────────────────────────────────────────
+    // Columns: 0=Club, 1=2021, 2=2022, 3=2023, 4=2024, 5=2025, 6=2026(pool),
+    //          7=5-Yr Avg Pool, 8=CAGR, 9=2025 Rank
+    // Note: 2021-2025 = actual signing-bonus spend; 2026 = official bonus pool
+    {
+      const rows = sheetRows("Draft Spend History");
+      const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+      const YEAR_COLS = [1, 2, 3, 4, 5, 6];
+
+      for (let ri = 4; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const club = String(row[0] ?? "").trim();
+        if (!MLB_CLUBS.has(club)) continue;
+
+        spendIds.set(club, new Map());
+
+        for (let yi = 0; yi < YEARS.length; yi++) {
+          const year = YEARS[yi];
+          const colIdx = YEAR_COLS[yi];
+          const val = row[colIdx];
+          if (val === null || val === undefined || val === "") continue;
+
+          const amt = typeof val === "number" ? val : parseFloat(String(val).replace(/[,$]/g,""));
+          if (isNaN(amt)) continue;
+
+          // 2026 is official bonus pool (not actual spend); 2021-2025 are actual spend
+          const totalDraftSpend = year !== 2026 ? amt : null;
+          const poolAllotment   = year === 2026 ? amt : null;
+
+          const r = await client.query<{id:number}>(
+            `INSERT INTO club_draft_spend_history
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_excel_column, source_preamble,
+                mlb_org, draft_year, total_draft_spend, pool_allotment,
+                evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'verified_public','unverified',FALSE)
+             RETURNING id`,
+            [datasetId, sfvId, jobId, ri+1, "Draft Spend History", String(year), spendPreamble,
+             club, year, totalDraftSpend, poolAllotment]
+          );
+          spendIds.get(club)!.set(year, r.rows[0].id);
+          l1Spend++;
+        }
+
+        // L2: 5-Yr Avg Pool (col 7) — canonical source
+        const avgPoolVal = row[7];
+        if (avgPoolVal !== null && avgPoolVal !== undefined && avgPoolVal !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, numeric_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'avg_pool_5yr',$2,2021,2025,'2021-2025 (5yr)',
+                     'calculated',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, Number(avgPoolVal), mv["avg_5yr"] ?? null,
+             datasetId, sfvId, jobId, "Draft Spend History", ri+1, "5-Yr Avg Pool (21-25)", spendPreamble]
+          );
+          l2Ids.set(`${club}::avg_pool_5yr`, r.rows[0].id);
+          l2Count++;
+        }
+
+        // L2: CAGR (col 8) — correction #2: cagr_pool_5yr
+        const cagrPoolVal = row[8];
+        if (cagrPoolVal !== null && cagrPoolVal !== undefined && cagrPoolVal !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, numeric_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'cagr_pool_5yr',$2,2021,2025,'2021-2025 (5yr)',
+                     'calculated',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, Number(cagrPoolVal), mv["cagr_5yr"] ?? null,
+             datasetId, sfvId, jobId, "Draft Spend History", ri+1, "5-Yr CAGR (21->25)", spendPreamble]
+          );
+          l2Ids.set(`${club}::cagr_pool_5yr`, r.rows[0].id);
+          l2Count++;
+        }
+
+        // L2: 2025 Rank (col 9) — correction #3: pool_rank
+        const rankVal = row[9];
+        if (rankVal !== null && rankVal !== undefined && rankVal !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, numeric_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'pool_rank',$2,2025,2025,'2025',
+                     'calculated',NULL,$3,$4,$5,$6,$7,$8,$9,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, Number(rankVal),
+             datasetId, sfvId, jobId, "Draft Spend History", ri+1, "2025 Rank (1=largest)", spendPreamble]
+          );
+          l2Ids.set(`${club}::pool_rank`, r.rows[0].id);
+          l2Count++;
+        }
+      }
+    }
+
+    // ── SHEET 3: Trend Analysis ───────────────────────────────────────────────
+    // Columns: 0=Club, 1=5yrAvgCBTPay, 2=CBTTier, 3=TimesOverCBT, 4=Penalty,
+    //          5=5yrAvgPool, 6=PoolTier, 7=Correlation, 8=Pool2026, 9=Pool2026vs5yr, 10=Read
+    // Non-club bullet rows (array index 36+) = L3 league research_note findings
+    {
+      const rows = sheetRows("Trend Analysis");
+
+      for (let ri = 4; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const club = String(row[0] ?? "").trim();
+        if (!MLB_CLUBS.has(club)) continue;
+
+        // L2: CBT Payroll Tier (col 2) — correction #4: cbt_payroll_tier (canonical)
+        const cbtTierVal = row[2];
+        if (cbtTierVal !== null && cbtTierVal !== undefined && String(cbtTierVal).trim()) {
+          const tierStr = String(cbtTierVal).trim();
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, text_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'cbt_payroll_tier',$2,2021,2025,'2021-2025 (5yr)',
+                     'osm_proprietary',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, tierStr, mv["cbt_payroll_tier"] ?? null,
+             datasetId, sfvId, jobId, "Trend Analysis", ri+1, "CBT Payroll Tier", trendPreamble]
+          );
+          l2Ids.set(`${club}::cbt_payroll_tier`, r.rows[0].id);
+          l2Count++;
+        }
+
+        // L2: Times Picked-10-Spots Penalty proxy (col 4) — correction #5
+        const penaltyVal = row[4];
+        if (penaltyVal !== null && penaltyVal !== undefined && penaltyVal !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, numeric_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'times_penalty_proxy',$2,2021,2025,'2021-2025 (5yr)',
+                     'calculated',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, Number(penaltyVal), mv["count_seasons_over_threshold"] ?? null,
+             datasetId, sfvId, jobId, "Trend Analysis", ri+1, "Times Picked-10-Spots Penalty (proxy)", trendPreamble]
+          );
+          l2Ids.set(`${club}::times_penalty_proxy`, r.rows[0].id);
+          l2Count++;
+        }
+
+        // L2: Draft Pool Tier (col 6) — correction #6: draft_pool_tier (canonical)
+        const poolTierVal = row[6];
+        if (poolTierVal !== null && poolTierVal !== undefined && String(poolTierVal).trim()) {
+          const tierStr = String(poolTierVal).trim();
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, text_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'draft_pool_tier',$2,2021,2025,'2021-2025 (5yr)',
+                     'osm_proprietary',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, tierStr, mv["draft_pool_tier"] ?? null,
+             datasetId, sfvId, jobId, "Trend Analysis", ri+1, "Draft Pool Tier", trendPreamble]
+          );
+          l2Ids.set(`${club}::draft_pool_tier`, r.rows[0].id);
+          l2Count++;
+        }
+
+        // L2: 2026 Pool vs 5-Yr Avg Pool % (col 9) — canonical source
+        const pctVal = row[9];
+        if (pctVal !== null && pctVal !== undefined && pctVal !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO derived_metrics
+               (entity_type, entity_key, metric_name, numeric_value, period_start, period_end,
+                period_label, evidence_class, methodology_version_id,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                calculated_by, is_fixture)
+             VALUES ('mlb_org',$1,'pct_vs_avg_pool',$2,2021,2026,'2021-2026',
+                     'calculated',$3,$4,$5,$6,$7,$8,$9,$10,'ingestion_job',FALSE)
+             RETURNING id`,
+            [club, Number(pctVal), mv["pct_vs_avg"] ?? null,
+             datasetId, sfvId, jobId, "Trend Analysis", ri+1, "2026 Pool vs 5-Yr Avg Pool (%)", trendPreamble]
+          );
+          l2Ids.set(`${club}::pct_vs_avg_pool`, r.rows[0].id);
+          l2Count++;
+        }
+
+        // L3: Payroll ↔ Draft Pool Correlation Direction (col 7) — correction #7
+        const corrVal = row[7];
+        if (corrVal !== null && corrVal !== undefined && String(corrVal).trim()) {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO osm_research_findings
+               (subject_type, subject_key, finding_type, finding_text, period_description,
+                source_type, dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                evidence_class, is_fixture)
+             VALUES ('mlb_org',$1,'correlation',$2,'2021-2025',
+                     'excel_worksheet',$3,$4,$5,$6,$7,$8,$9,'osm_proprietary',FALSE)
+             RETURNING id`,
+            [club, String(corrVal).trim(),
+             datasetId, sfvId, jobId, "Trend Analysis", ri+1, "Payroll <-> Draft Pool Correlation Direction", trendPreamble]
+          );
+          l3Ids.set(`${club}::correlation`, r.rows[0].id);
+          l3Count++;
+        }
+
+        // L3: Pattern / Read (col 10) — qualitative OSM read
+        const readVal = row[10];
+        if (readVal !== null && readVal !== undefined && String(readVal).trim()) {
+          await client.query(
+            `INSERT INTO osm_research_findings
+               (subject_type, subject_key, finding_type, finding_text, period_description,
+                source_type, dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                evidence_class, is_fixture)
+             VALUES ('mlb_org',$1,'pattern_read',$2,'2021-2026',
+                     'excel_worksheet',$3,$4,$5,$6,$7,$8,$9,'osm_proprietary',FALSE)`,
+            [club, String(readVal).trim(),
+             datasetId, sfvId, jobId, "Trend Analysis", ri+1, "Pattern / Read", trendPreamble]
+          );
+          l3Count++;
+        }
+
+        // Record source assertions for repeated metrics (already canonical elsewhere)
+        // 5-Yr Avg CBT Payroll (col 1) → assertion of avg_5yr_payroll L2 record
+        const avgPayCanonId = l2Ids.get(`${club}::avg_5yr_payroll`);
+        const taAvgCBT = row[1];
+        if (avgPayCanonId && taAvgCBT !== null && taAvgCBT !== undefined) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value)
+             VALUES ('derived_metrics',$1,$2,$3,'Trend Analysis',$4,'5-Yr Avg CBT Payroll',$5,$6)`,
+            [avgPayCanonId, sfvId, jobId, ri+1, trendPreamble, String(taAvgCBT)]
+          );
+          rsaCount++;
+        }
+
+        // Times Over CBT (col 3) → assertion of times_over_cbt L2 record
+        const timesCanonId = l2Ids.get(`${club}::times_over_cbt`);
+        const taTimes = row[3];
+        if (timesCanonId && taTimes !== null && taTimes !== undefined) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value)
+             VALUES ('derived_metrics',$1,$2,$3,'Trend Analysis',$4,'Times Over CBT Thresh (21-25)',$5,$6)`,
+            [timesCanonId, sfvId, jobId, ri+1, trendPreamble, String(taTimes)]
+          );
+          rsaCount++;
+        }
+
+        // 5-Yr Avg Draft Pool (col 5) → assertion of avg_pool_5yr L2 record
+        const avgPoolCanonId = l2Ids.get(`${club}::avg_pool_5yr`);
+        const taAvgPool = row[5];
+        if (avgPoolCanonId && taAvgPool !== null && taAvgPool !== undefined) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value)
+             VALUES ('derived_metrics',$1,$2,$3,'Trend Analysis',$4,'5-Yr Avg Draft Pool',$5,$6)`,
+            [avgPoolCanonId, sfvId, jobId, ri+1, trendPreamble, String(taAvgPool)]
+          );
+          rsaCount++;
+        }
+
+        // 2026 Draft Pool Released (col 8) → assertion of club_draft_spend_history 2026 L1 record
+        const spend2026Id = spendIds.get(club)?.get(2026);
+        const ta2026Pool = row[8];
+        if (spend2026Id && ta2026Pool !== null && ta2026Pool !== undefined) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value)
+             VALUES ('club_draft_spend_history',$1,$2,$3,'Trend Analysis',$4,'2026 Draft Pool (Released)',$5,$6)`,
+            [spend2026Id, sfvId, jobId, ri+1, trendPreamble, String(ta2026Pool)]
+          );
+          rsaCount++;
+        }
+      }
+
+      // League-wide research bullet points (rows 38-45 in Excel = array index 37-44)
+      const bulletTexts: string[] = [];
+      for (let ri = 36; ri < Math.min(rows.length, 50); ri++) {
+        const row = rows[ri];
+        const cell = String(row[0] ?? "").trim();
+        if (cell.startsWith("•") || cell.startsWith("KEY LEAGUE")) {
+          bulletTexts.push(cell);
+        }
+      }
+      for (const bulletText of bulletTexts) {
+        await client.query(
+          `INSERT INTO osm_research_findings
+             (subject_type, subject_key, finding_type, finding_text, period_description,
+              source_type, dataset_id, source_file_version_id, ingestion_job_id,
+              source_worksheet, source_preamble, evidence_class, is_fixture)
+           VALUES ('league','MLB','research_note',$1,'2021-2026',
+                   'excel_worksheet',$2,$3,$4,'Trend Analysis',$5,'osm_proprietary',FALSE)`,
+          [bulletText, datasetId, sfvId, jobId, trendPreamble]
+        );
+        l3Count++;
+      }
+    }
+
+    // ── SHEET 4: 2026 Draft Projection ────────────────────────────────────────
+    // Columns: 0=Club, 1=Pick1stRd, 2=Pool2026, 3=Avg5yrPool, 4=Pool2026vs5yr,
+    //          5=AssumedRate, 6=ProjTotalSpend, 7=ProjAbovePool, 8=CBTTier, 9=Confidence
+    {
+      const rows = sheetRows("2026 Draft Projection");
+
+      for (let ri = 4; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const club = String(row[0] ?? "").trim();
+        if (!MLB_CLUBS.has(club)) continue;
+
+        // Enrich 2026 draft spend row with first_round_pick (col 1)
+        const pickVal = row[1];
+        const spend2026Id = spendIds.get(club)?.get(2026);
+        if (spend2026Id && pickVal !== null && pickVal !== undefined && pickVal !== "") {
+          await client.query(
+            `UPDATE club_draft_spend_history SET first_round_pick = $1 WHERE id = $2`,
+            [parseInt(String(pickVal)), spend2026Id]
+          );
+        }
+
+        // Source assertion: 2026 Bonus Pool (col 2) → club_draft_spend_history 2026
+        const proj2026Pool = row[2];
+        if (spend2026Id && proj2026Pool !== null && proj2026Pool !== undefined) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value)
+             VALUES ('club_draft_spend_history',$1,$2,$3,'2026 Draft Projection',$4,'2026 Bonus Pool (Official, $)',$5,$6)`,
+            [spend2026Id, sfvId, jobId, ri+1, projPreamble, String(proj2026Pool)]
+          );
+          rsaCount++;
+        }
+
+        // Source assertion: 5-Yr Avg Pool (col 3) → avg_pool_5yr L2
+        const avgPoolCanonId = l2Ids.get(`${club}::avg_pool_5yr`);
+        const projAvgPool = row[3];
+        if (avgPoolCanonId && projAvgPool !== null && projAvgPool !== undefined) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value)
+             VALUES ('derived_metrics',$1,$2,$3,'2026 Draft Projection',$4,'5-Yr Avg Pool (21-25, $)',$5,$6)`,
+            [avgPoolCanonId, sfvId, jobId, ri+1, projPreamble, String(projAvgPool)]
+          );
+          rsaCount++;
+        }
+
+        // Source assertion: 2026 Pool vs 5-Yr Avg (col 4) → pct_vs_avg_pool L2
+        const pctCanonId = l2Ids.get(`${club}::pct_vs_avg_pool`);
+        const projPct = row[4];
+        if (pctCanonId && projPct !== null && projPct !== undefined) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value)
+             VALUES ('derived_metrics',$1,$2,$3,'2026 Draft Projection',$4,'2026 Pool vs 5-Yr Avg',$5,$6)`,
+            [pctCanonId, sfvId, jobId, ri+1, projPreamble, String(projPct)]
+          );
+          rsaCount++;
+        }
+
+        // Source assertion: CBT Payroll Tier (col 8) → cbt_payroll_tier L2
+        const cbtTierCanonId = l2Ids.get(`${club}::cbt_payroll_tier`);
+        const projCBTTier = row[8];
+        if (cbtTierCanonId && projCBTTier !== null && projCBTTier !== undefined && String(projCBTTier).trim()) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value)
+             VALUES ('derived_metrics',$1,$2,$3,'2026 Draft Projection',$4,'CBT Payroll Tier (21-25 Avg)',$5,$6)`,
+            [cbtTierCanonId, sfvId, jobId, ri+1, projPreamble, String(projCBTTier)]
+          );
+          rsaCount++;
+        }
+
+        // L3: Assumed Total-Spend-vs-Pool Rate (col 5) — correction #8: methodology_assumption
+        const rateVal = row[5];
+        if (rateVal !== null && rateVal !== undefined && rateVal !== "") {
+          const ratePct = typeof rateVal === "number" ? (rateVal * 100).toFixed(3) + "%" : String(rateVal);
+          await client.query(
+            `INSERT INTO osm_research_findings
+               (subject_type, subject_key, finding_type, finding_text,
+                structured_value, period_description,
+                source_type, dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                evidence_class, is_fixture)
+             VALUES ('mlb_org',$1,'methodology_assumption',
+                     'Assumed total-spend-vs-pool rate for 2026 draft projection: ' || $2,
+                     $3,'2026','excel_worksheet',$4,$5,$6,$7,$8,$9,$10,'osm_proprietary',FALSE)`,
+            [club, ratePct,
+             JSON.stringify({ rate: rateVal, rate_pct: ratePct, source: "2026 Draft Projection workbook" }),
+             datasetId, sfvId, jobId, "2026 Draft Projection", ri+1,
+             "Assumed Total-Spend-vs-Pool Rate (%)", projPreamble]
+          );
+          l3Count++;
+        }
+
+        // L4: Projected 2026 TOTAL Draft Spend (col 6) — draft_spend_projection
+        const projSpend = row[6];
+        if (projSpend !== null && projSpend !== undefined && projSpend !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO diamondiq_inferences
+               (subject_type, subject_key, inference_context, inference_type,
+                numeric_value, evidence_class, model_identifier,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                generated_by, osm_review_status, is_fixture)
+             VALUES ('mlb_org',$1,'2026 MLB Draft Spending Projection','draft_spend_projection',
+                     $2,'diamondiq_inference','toc_spend_projection_v1',
+                     $3,$4,$5,$6,$7,$8,$9,'osm_staff_imported','pending',FALSE)
+             RETURNING id`,
+            [club, Number(projSpend),
+             datasetId, sfvId, jobId, "2026 Draft Projection", ri+1,
+             "Projected 2026 TOTAL Draft Spend ($)", projPreamble]
+          );
+          l4SpendIds.set(club, r.rows[0].id);
+          l4Count++;
+        }
+
+        // L4: Projected $ Above Pool (col 7) — pool_overage_projection
+        const projAbove = row[7];
+        if (projAbove !== null && projAbove !== undefined && projAbove !== "") {
+          const r = await client.query<{id:number}>(
+            `INSERT INTO diamondiq_inferences
+               (subject_type, subject_key, inference_context, inference_type,
+                numeric_value, evidence_class, model_identifier,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                generated_by, osm_review_status, is_fixture)
+             VALUES ('mlb_org',$1,'2026 MLB Draft Spending Projection','pool_overage_projection',
+                     $2,'diamondiq_inference','toc_spend_projection_v1',
+                     $3,$4,$5,$6,$7,$8,$9,'osm_staff_imported','pending',FALSE)
+             RETURNING id`,
+            [club, Number(projAbove),
+             datasetId, sfvId, jobId, "2026 Draft Projection", ri+1,
+             "Projected $ Above Pool (Rounds 11-20 + UDFA)", projPreamble]
+          );
+          l4OverIds.set(club, r.rows[0].id);
+          l4Count++;
+        }
+
+        // L4: Projection Confidence (col 9) — confidence_label
+        const confVal = row[9];
+        if (confVal !== null && confVal !== undefined && String(confVal).trim()) {
+          const confText = String(confVal).trim();
+          // Extract High/Medium/Low from the beginning of the text
+          const confLabel = confText.startsWith("High") ? "High"
+                          : confText.startsWith("Medium") ? "Medium"
+                          : confText.startsWith("Low") ? "Low" : null;
+          await client.query(
+            `INSERT INTO diamondiq_inferences
+               (subject_type, subject_key, inference_context, inference_type,
+                text_value, confidence_label, evidence_class, model_identifier,
+                dataset_id, source_file_version_id, ingestion_job_id,
+                source_worksheet, source_excel_row, source_excel_column, source_preamble,
+                generated_by, osm_review_status, is_fixture)
+             VALUES ('mlb_org',$1,'2026 MLB Draft Spending Projection','confidence_label',
+                     $2,$3,'diamondiq_inference','toc_spend_projection_v1',
+                     $4,$5,$6,$7,$8,$9,$10,'osm_staff_imported','pending',FALSE)`,
+            [club, confText, confLabel,
+             datasetId, sfvId, jobId, "2026 Draft Projection", ri+1,
+             "Projection Confidence", projPreamble]
+          );
+          l4Count++;
+        }
+      }
+    }
+
+    // ── RECORD DERIVATIONS ────────────────────────────────────────────────────
+    // Link each L2 derived metric and L4 inference back to its L1 source records.
+    for (const club of MLB_CLUBS) {
+      const clubPayrollMap = payrollIds.get(club);
+      const clubSpendMap   = spendIds.get(club);
+
+      // avg_5yr_payroll → 2021-2025 payroll records
+      const avgPayId = l2Ids.get(`${club}::avg_5yr_payroll`);
+      if (avgPayId && clubPayrollMap) {
+        for (const yr of [2021,2022,2023,2024,2025]) {
+          const srcId = clubPayrollMap.get(yr);
+          if (srcId) {
+            await client.query(
+              `INSERT INTO record_derivations
+                 (derived_table, derived_record_id, derived_field, source_table, source_record_id,
+                  derivation_method, methodology_version_id, derived_by)
+               VALUES ('derived_metrics',$1,'numeric_value','club_payroll_history',$2,'avg',$3,'ingestion_job')`,
+              [avgPayId, srcId, mv["avg_5yr"] ?? null]
+            );
+            rdCount++;
+          }
+        }
+      }
+
+      // cagr_payroll_5yr → 2021 and 2025 payroll records
+      const cagrPayId = l2Ids.get(`${club}::cagr_payroll_5yr`);
+      if (cagrPayId && clubPayrollMap) {
+        for (const yr of [2021, 2025]) {
+          const srcId = clubPayrollMap.get(yr);
+          if (srcId) {
+            await client.query(
+              `INSERT INTO record_derivations
+                 (derived_table, derived_record_id, derived_field, source_table, source_record_id,
+                  derivation_method, methodology_version_id, derived_by)
+               VALUES ('derived_metrics',$1,'numeric_value','club_payroll_history',$2,'cagr',$3,'ingestion_job')`,
+              [cagrPayId, srcId, mv["cagr_5yr"] ?? null]
+            );
+            rdCount++;
+          }
+        }
+      }
+
+      // times_over_cbt → 2021-2025 payroll records
+      const timesId = l2Ids.get(`${club}::times_over_cbt`);
+      if (timesId && clubPayrollMap) {
+        for (const yr of [2021,2022,2023,2024,2025]) {
+          const srcId = clubPayrollMap.get(yr);
+          if (srcId) {
+            await client.query(
+              `INSERT INTO record_derivations
+                 (derived_table, derived_record_id, derived_field, source_table, source_record_id,
+                  derivation_method, methodology_version_id, derived_by)
+               VALUES ('derived_metrics',$1,'numeric_value','club_payroll_history',$2,'count',$3,'ingestion_job')`,
+              [timesId, srcId, mv["count_seasons_over_threshold"] ?? null]
+            );
+            rdCount++;
+          }
+        }
+      }
+
+      // avg_pool_5yr → 2021-2025 spend records
+      const avgPoolId = l2Ids.get(`${club}::avg_pool_5yr`);
+      if (avgPoolId && clubSpendMap) {
+        for (const yr of [2021,2022,2023,2024,2025]) {
+          const srcId = clubSpendMap.get(yr);
+          if (srcId) {
+            await client.query(
+              `INSERT INTO record_derivations
+                 (derived_table, derived_record_id, derived_field, source_table, source_record_id,
+                  derivation_method, methodology_version_id, derived_by)
+               VALUES ('derived_metrics',$1,'numeric_value','club_draft_spend_history',$2,'avg',$3,'ingestion_job')`,
+              [avgPoolId, srcId, mv["avg_5yr"] ?? null]
+            );
+            rdCount++;
+          }
+        }
+      }
+
+      // cagr_pool_5yr → 2021 and 2025 spend records
+      const cagrPoolId = l2Ids.get(`${club}::cagr_pool_5yr`);
+      if (cagrPoolId && clubSpendMap) {
+        for (const yr of [2021, 2025]) {
+          const srcId = clubSpendMap.get(yr);
+          if (srcId) {
+            await client.query(
+              `INSERT INTO record_derivations
+                 (derived_table, derived_record_id, derived_field, source_table, source_record_id,
+                  derivation_method, methodology_version_id, derived_by)
+               VALUES ('derived_metrics',$1,'numeric_value','club_draft_spend_history',$2,'cagr',$3,'ingestion_job')`,
+              [cagrPoolId, srcId, mv["cagr_5yr"] ?? null]
+            );
+            rdCount++;
+          }
+        }
+      }
+
+      // pct_vs_avg_pool → 2026 spend record + avg_pool_5yr metric (use L1 spend records)
+      const pctId = l2Ids.get(`${club}::pct_vs_avg_pool`);
+      if (pctId && clubSpendMap) {
+        const src2026 = clubSpendMap.get(2026);
+        if (src2026) {
+          await client.query(
+            `INSERT INTO record_derivations
+               (derived_table, derived_record_id, derived_field, source_table, source_record_id,
+                derivation_method, methodology_version_id, derived_by)
+             VALUES ('derived_metrics',$1,'numeric_value','club_draft_spend_history',$2,'pct_vs_avg',$3,'ingestion_job')`,
+            [pctId, src2026, mv["pct_vs_avg"] ?? null]
+          );
+          rdCount++;
+        }
+      }
+
+      // L4 draft_spend_projection → L1 spend records (2021-2026)
+      const l4SpendId = l4SpendIds.get(club);
+      if (l4SpendId && clubSpendMap) {
+        for (const yr of [2021,2022,2023,2024,2025,2026]) {
+          const srcId = clubSpendMap.get(yr);
+          if (srcId) {
+            await client.query(
+              `INSERT INTO record_derivations
+                 (derived_table, derived_record_id, derived_field, source_table, source_record_id,
+                  derivation_method, derived_by)
+               VALUES ('diamondiq_inferences',$1,'numeric_value','club_draft_spend_history',$2,'projection_model','ingestion_job')`,
+              [l4SpendId, srcId]
+            );
+            rdCount++;
+          }
+        }
+      }
+
+      // L4 pool_overage_projection → L1 2026 spend record
+      const l4OverId = l4OverIds.get(club);
+      if (l4OverId && clubSpendMap) {
+        const src2026 = clubSpendMap.get(2026);
+        if (src2026) {
+          await client.query(
+            `INSERT INTO record_derivations
+               (derived_table, derived_record_id, derived_field, source_table, source_record_id,
+                derivation_method, derived_by)
+             VALUES ('diamondiq_inferences',$1,'numeric_value','club_draft_spend_history',$2,'projection_model','ingestion_job')`,
+            [l4OverId, src2026]
+          );
+          rdCount++;
+        }
+      }
+    }
+
+    // ── UPDATE JOB STATUS ────────────────────────────────────────────────────
+    await client.query(
+      `UPDATE ingestion_jobs
+       SET status='complete', completed_at=NOW(),
+           rows_imported=$1
+       WHERE id=$2`,
+      [l1Payroll + l1Spend + l2Count + l3Count + l4Count, jobId]
+    );
+
+    // Update data_library processing status
+    await client.query(
+      `UPDATE data_library SET processing_status='ready', last_import_at=NOW() WHERE id=$1`,
+      [datasetId]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      data: {
+        jobId,
+        status: "complete",
+        layers: {
+          layer1: {
+            club_payroll_history: l1Payroll,
+            club_draft_spend_history: l1Spend,
+            total: l1Payroll + l1Spend,
+          },
+          layer2: { derived_metrics: l2Count },
+          layer3: { osm_research_findings: l3Count },
+          layer4: { diamondiq_inferences: l4Count },
+        },
+        totalProductionRecords: l1Payroll + l1Spend + l2Count + l3Count + l4Count,
+        sourceAssertions: rsaCount,
+        recordDerivations: rdCount,
+        mlbClubsProcessed: MLB_CLUBS.size,
+      },
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[ingestion/commit]", err);
+    return res.status(500).json({
+      ok: false,
+      error: `Commit failed and was rolled back: ${(err as Error).message}`,
+    });
+  } finally {
+    client.release();
   }
 });
 
