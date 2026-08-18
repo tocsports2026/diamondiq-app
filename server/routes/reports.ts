@@ -3,6 +3,7 @@ import { requireAuth, requireStaff } from "../middleware/auth";
 import { query, queryOne } from "../db";
 import { v4 as uuidv4 } from "uuid";
 import { retrieveAndAssembleClubReport, type ClubReportParams } from "../evidence/clubRetrieval";
+import { retrieveAndAssembleDraftReport, type DraftReportParams } from "../evidence/draftRetrieval";
 
 const router = Router();
 
@@ -180,7 +181,7 @@ router.post("/", requireAuth, async (req, res) => {
 
     const ref = `DIQ-${uuidv4().slice(0, 8).toUpperCase()}`;
 
-    // Build report content — evidence-backed for club, placeholder for draft/nil
+    // Build report content — evidence-backed for club and draft; placeholder for nil
     let content: Record<string, unknown>;
     if (type === "club") {
       // Evidence-backed path: retrieve from production research database
@@ -193,8 +194,23 @@ router.post("/", requireAuth, async (req, res) => {
         return res.status(400).json({ ok: false, error: "researchParams.club is required for club reports" });
       }
       content = await retrieveAndAssembleClubReport(clubParams) as unknown as Record<string, unknown>;
+    } else if (type === "draft") {
+      // Evidence-backed path: retrieve player-level draft records from production database.
+      // Undrafted-population comparison (task #7) is intentionally deferred.
+      const draftParams: DraftReportParams = {
+        position:     (researchParams as Record<string, string>)?.position,
+        player_class: (researchParams as Record<string, string>)?.player_class,
+        level:        (researchParams as Record<string, string>)?.level,
+        school_type:  (researchParams as Record<string, string>)?.school_type,
+        draftYears:   (researchParams as Record<string, string>)?.draftYears,
+        conference:   (researchParams as Record<string, string>)?.conference,
+        rankingRange: (researchParams as Record<string, string>)?.rankingRange,
+        heightRange:  (researchParams as Record<string, string>)?.heightRange,
+        weightRange:  (researchParams as Record<string, string>)?.weightRange,
+      };
+      content = await retrieveAndAssembleDraftReport(draftParams, researchQuestion || undefined) as unknown as Record<string, unknown>;
     } else {
-      // Placeholder path for unsupported types (draft, nil) — retained until evidence engine extended
+      // Placeholder path for unsupported types (nil) — retained until evidence engine extended
       content = buildInitialContent(
         type as string,
         researchParams || {},

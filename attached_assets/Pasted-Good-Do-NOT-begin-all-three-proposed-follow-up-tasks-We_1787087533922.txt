@@ -1,0 +1,95 @@
+Good. Do NOT begin all three proposed follow-up tasks.
+
+We have enough production data now to begin testing whether DiamondIQ actually performs the core analytical job it was designed to perform.
+
+For now, implement ONLY proposed follow-up task #6:
+
+Connect the existing draft/prospect report workflow to the real player-level production data now stored in draft_players, slot_values, club draft history, and the associated provenance tables.
+
+GOAL
+
+I want DiamondIQ to be capable of retrieving real historical drafted-player records when evaluating a prospect rather than relying only on club-level summaries.
+
+This is NOT a request to redesign the report system or create a new analytical methodology.
+
+Extend the EXISTING evidence retrieval system minimally.
+
+REQUIREMENTS
+
+1. Use only production records where is_fixture = false.
+
+2. Player-level retrieval should be capable of returning, where available:
+
+- player name
+- draft year
+- draft round / round label
+- overall pick
+- drafting MLB organization
+- position
+- school
+- player class
+- MLB.com rank
+- slot value
+- signing bonus
+- signing date
+- outcome group
+- NDFA status where applicable
+- source/provenance
+
+3. Preserve missing values as missing.
+Do not infer or fabricate missing signing bonuses, rankings, positions, schools, draft status, or outcomes.
+
+4. Preserve evidence provenance.
+
+Every player-level fact surfaced in a report must remain traceable to its underlying production record and source.
+
+5. Do NOT yet build the undrafted-comparison analytical feature.
+
+The 1,724-player 2026 undrafted population must remain safely stored and retrievable, but we will address comparative use of that population separately in task #7.
+
+6. Do NOT yet modify or supersede the existing 2026 projection inference records.
+
+We will handle that separately after testing.
+
+7. Do NOT create new DiamondIQ inferences merely because player data is now available.
+
+This step is retrieval integration only.
+
+8. Do not redesign the UI unless a very small change is necessary to display the retrieved evidence.
+
+TEST AFTER IMPLEMENTATION
+
+After connecting player-level evidence retrieval, run ONE internal test using an actual prospect/report workflow already supported by DiamondIQ.
+
+The purpose is to prove:
+
+prospect/report request
+→ database retrieval
+→ relevant historical player evidence
+→ provenance
+→ report
+
+Do not use general model baseball knowledge to fill gaps.
+
+Do not publish the report to the athlete/client side.
+
+Keep:
+status = pending
+published_at = null
+
+REPORT BACK CONCISELY WITH:
+
+1. What code/functionality changed
+2. Which production tables are now queried for player-level draft evidence
+3. The test subject used
+4. Number of historical player records retrieved
+5. A small sample of the retrieved player records
+6. Why those records were selected by the retrieval system
+7. Whether every surfaced record has source provenance
+8. Fixture records used
+9. Model/general AI baseball knowledge used
+10. New internal report reference
+
+STOP THERE.
+
+Do not proceed to tasks #7 or #8 without my approval.
