@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    background-color: #090E13;
+    color: #E8EDF2;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0F1720;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1E2D3D;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2A3D52;
+  }
+}
+
+@layer components {
+  .diq-label {
+    @apply text-2xs font-semibold uppercase tracking-widest text-text-teal;
+  }
+
+  .diq-section-label {
+    @apply text-2xs font-semibold uppercase tracking-widest text-text-secondary px-3 py-2;
+  }
+
+  .diq-nav-item {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded text-sm text-text-secondary
+           hover:text-text-primary hover:bg-bg-hover transition-colors duration-150 cursor-pointer;
+  }
+
+  .diq-nav-item-active {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded text-sm font-medium
+           text-text-teal bg-teal-muted border border-teal-border cursor-pointer;
+  }
+
+  .diq-card {
+    @apply bg-bg-card border border-bg-border rounded-lg;
+  }
+
+  .diq-btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-teal text-bg-base text-sm font-semibold
+           rounded hover:bg-teal-bright transition-colors duration-150 cursor-pointer;
+  }
+
+  .diq-btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 border border-bg-border text-text-primary
+           text-sm font-medium rounded hover:bg-bg-hover transition-colors duration-150 cursor-pointer;
+  }
+
+  .diq-btn-ghost {
+    @apply inline-flex items-center gap-1.5 text-sm text-text-teal font-medium
+           hover:text-teal-bright transition-colors duration-150 cursor-pointer;
+  }
+
+  .diq-input {
+    @apply w-full bg-bg-surface border border-bg-border rounded px-3 py-2 text-sm
+           text-text-primary placeholder-text-muted focus:outline-none focus:border-teal
+           transition-colors duration-150;
+  }
+
+  .diq-select {
+    @apply bg-bg-surface border border-bg-border rounded px-3 py-2 text-sm
+           text-text-primary focus:outline-none focus:border-teal cursor-pointer;
+  }
+
+  .diq-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-2xs font-semibold uppercase tracking-wide;
+  }
+
+  .diq-badge-published {
+    @apply diq-badge bg-status-published/15 text-status-published border border-status-published/30;
+  }
+
+  .diq-badge-pending {
+    @apply diq-badge bg-status-pending/15 text-status-pending border border-status-pending/30;
+  }
+
+  .diq-badge-updated {
+    @apply diq-badge bg-status-updated/15 text-status-updated border border-status-updated/30;
+  }
+
+  .diq-badge-archived {
+    @apply diq-badge bg-status-archived/15 text-status-archived border border-status-archived/30;
+  }
+
+  .evidence-tag {
+    @apply inline-flex items-center gap-1 text-2xs font-medium px-1.5 py-0.5 rounded
+           bg-bg-surface border border-bg-border text-text-secondary;
+  }
+  .evidence-verified { @apply border-text-green/30 text-text-green bg-text-green/5; }
+  .evidence-osm { @apply border-teal-border text-text-teal bg-teal-muted; }
+  .evidence-calculated { @apply border-status-updated/30 text-status-updated bg-status-updated/5; }
+  .evidence-inference { @apply border-status-pending/30 text-status-pending bg-status-pending/5; }
+  .evidence-missing { @apply border-text-secondary/30 text-text-secondary; }
+
+  .pending-overlay {
+    @apply blur-sm pointer-events-none select-none;
+  }
+
+  .dev-fixture-notice {
+    @apply text-2xs text-status-pending/70 font-medium;
+  }
+}
+
+@layer utilities {
+  .font-condensed {
+    font-family: 'Barlow Condensed', system-ui, sans-serif;
+  }
+}

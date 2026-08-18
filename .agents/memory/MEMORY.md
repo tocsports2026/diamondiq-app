@@ -1,0 +1,1 @@
+- [Vite + Tailwind monorepo setup](vite-tailwind-setup.md) — postcss config path, tailwind content globs, and Vite root alias must all be workspace-root-relative; react must be installed explicitly.

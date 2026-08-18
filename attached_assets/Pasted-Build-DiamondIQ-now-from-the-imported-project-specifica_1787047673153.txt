@@ -1,0 +1,28 @@
+Build DiamondIQ now from the imported project specification.
+
+Before writing code, treat these files as authoritative:
+1. docs/DIAMONDIQ_MASTER_SPEC.md
+2. docs/DIAMONDIQ_ADDENDUM_v1_NAV_AND_DRAFT_REPORT.md
+3. README.md
+4. all 12 images in assets/references/
+5. assets/branding/TOC_White_OFFICIAL.png
+
+Implement the application. Do not redesign it, invent new pages, change navigation, add speculative metrics, or substitute branding.
+
+NON-NEGOTIABLE:
+- Use ONLY assets/branding/TOC_White_OFFICIAL.png for the TOC Sports logo. Never recreate, redraw, generate, approximate, or substitute it.
+- Follow the canonical navigation in the addendum on every client screen.
+- No standalone Scenarios navigation item.
+- Intelligence Requests are Admin-only.
+- Every generated report is hidden from the athlete until OSM Admin explicitly reviews and publishes it.
+- Admin report review must support Keep, Edit, Replace, Hide, internal notes, and Publish.
+- DiamondIQ must follow the Evidence-First AI rules and never invent missing facts, contacts, NIL relationships, bonuses, scouting grades, probabilities, or scores.
+- Implement the corrected Phase 1 Draft Intelligence Report rules from the addendum, not conflicting pixels in older mockups.
+- Preserve the approved dark navy/charcoal/teal design system and page hierarchy shown in the reference images.
+- Reference images control visual direction; written specs control functionality, permissions, data behavior, and any conflicts.
+
+Build the complete application structure defined in the specification, including athlete/client screens, optional My OSM/NIL Management features, and the OSM Admin workflows.
+
+Use realistic clearly-labeled development fixture data only where necessary to make the interface testable. Do not treat fixture data as verified production intelligence.
+
+Do not stop after planning or reviewing the files. Begin implementing the working application now. Only ask me a question if you are genuinely blocked by a required decision that the imported specification does not answer.

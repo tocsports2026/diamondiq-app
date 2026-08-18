@@ -1,0 +1,47 @@
+{
+  "name": "diamondiq",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"tsx watch server/index.ts\" \"vite --config client/vite.config.ts --port 5000\"",
+    "server": "tsx watch server/index.ts",
+    "client": "vite --config client/vite.config.ts",
+    "build": "vite build --config client/vite.config.ts && tsc -p tsconfig.json",
+    "start": "node dist/server/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-pg-simple": "^9.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.11.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uuid": "^9.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/connect-pg-simple": "^7.0.3",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/express-session": "^1.17.10",
+    "@types/multer": "^1.4.11",
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.10.9",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@types/uuid": "^9.0.7",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^10.0.5",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.6"
+  }
+}
