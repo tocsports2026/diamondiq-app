@@ -121,7 +121,36 @@ avg_5yr_payroll, cagr_payroll_5yr, times_over_cbt, avg_pool_5yr, cagr_pool_5yr, 
 Admin: admin@ocmsports.com / DiamondIQ2024!
 Athlete: jackson.miller@demo.com / Athlete2024!
 
+## league_facts Table (NEW — committed with Job #4)
+- Stores league-level L1 verified_public facts (not club-specific)
+- Columns: fact_type, season, numeric_value, text_value, evidence_class, full provenance cols, is_fixture
+- UNIQUE (fact_type, season, source_file_version_id)
+- fact_types used so far: 'cbt_threshold', 'league_draft_actual_spend'
+- Indexed on (fact_type, season) and ingestion_job_id
+
+## Commit Endpoint — Dual Mode (IMPORTANT)
+- Detects production table state at commit time
+- isFirstImport = all five production tables empty → runs original first-import path
+- else → runs dedup path: bulk-loads existing canonical IDs, writes source assertions, writes league_facts
+- Both paths share UPDATE JOB STATUS + COMMIT + response
+- Response includes `mode: "dedup"` field to distinguish
+
+## Job #4 — COMMITTED (2021-2025 Club Spending Draft Analysis.xlsx)
+Status: complete
+Committed: 2026-08-18
+
+| Item | Count |
+|---|---|
+| New canonical club-level records | 0 |
+| New league_facts records | 11 (6 CBT threshold + 5 actual spend) |
+| Source assertions written | 849 |
+| Conflicts with Job #3 | 0 |
+| Fixture records introduced | 0 |
+
+CBT thresholds: $210M (2021), $230M (2022), $233M (2023), $237M (2024), $241M (2025), $244M (2026)
+League actual spend: $291.4M, $327M, $313.9M, $374.3M, $392.5M (2021-2025)
+
 ## Next Priority (Per OSM Approval)
-- 3 additional Excel workbooks to ingest
+- 2 additional Excel workbooks to ingest
 - 21 annotated research articles to ingest (osm_articles + osm_article_annotations pipeline not yet built)
 - Stage 6 (Google Drive connector): NOT STARTED

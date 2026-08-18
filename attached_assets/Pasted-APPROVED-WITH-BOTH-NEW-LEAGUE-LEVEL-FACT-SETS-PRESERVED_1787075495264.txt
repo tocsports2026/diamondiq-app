@@ -1,0 +1,58 @@
+APPROVED WITH BOTH NEW LEAGUE-LEVEL FACT SETS PRESERVED.
+
+Proceed with Job #4.
+
+The dry-run demonstrates that the existing ingestion architecture is working correctly. Do not redesign or broadly expand it.
+
+DECISION #1 — APPROVED:
+Preserve the official CBT Base Threshold values for 2021–2026 as canonical L1 verified-public league-level facts.
+
+DECISION #2 — APPROVED:
+Preserve the league-wide actual signing-bonus spend values for 2021–2025 as canonical L1 verified-public league-level facts.
+
+Implement the MINIMUM schema necessary to store these two types of league-level factual records with the same provenance protections already used elsewhere.
+
+Prefer one small general-purpose league-level factual table if it can cleanly represent both datasets, rather than creating multiple highly specialized tables.
+
+The stored records must retain:
+- season/year
+- metric/type
+- value
+- evidence class
+- source file/version
+- ingestion job
+- worksheet
+- Excel row/column
+- source/preamble attribution
+
+Do not build additional features, reporting UI, new analysis systems, or generalized architecture beyond what is necessary to preserve and query these facts.
+
+Then commit Job #4.
+
+Expected behavior:
+
+- 0 new canonical club-level L1 records
+- 0 new canonical L2 records
+- 0 new canonical L3 records
+- 0 new canonical L4 records
+- 849 additional source assertions for the existing Job #3 canonical records
+- 0 conflicts with Job #3
+- 6 new CBT threshold league-level factual records
+- 5 new league-wide actual signing-bonus-spend factual records
+
+After commit, verify:
+
+1. Job #4 status = complete.
+2. No duplicate club-level canonical records were created.
+3. All 849 overlapping records were preserved as additional source assertions.
+4. Zero conflicts exist between Job #3 and Job #4.
+5. Six CBT threshold values are queryable for 2021–2026.
+6. Five league-wide actual signing-bonus-spend values are queryable for 2021–2025.
+7. Each of those 11 new league-level records retains complete source provenance.
+8. No DEV fixture data was introduced or made athlete-visible.
+
+Then STOP.
+
+Do not make further ingestion architecture changes.
+
+Once Job #4 is verified, tell me it is complete and ready for the next workbook.

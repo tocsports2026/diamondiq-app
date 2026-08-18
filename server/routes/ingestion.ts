@@ -1274,30 +1274,18 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
       return res.status(422).json({ ok: false, error: "Source file not on disk. Please re-upload." });
     }
 
-    // ── 2. Pre-commit safety check ───────────────────────────────────────────
-    const checks = await Promise.all([
+    // ── 2. Detect commit mode: first-import (tables empty) vs dedup ─────────
+    const existingCounts = await Promise.all([
       queryOne<{n:string}>("SELECT COUNT(*) n FROM club_payroll_history    WHERE is_fixture=FALSE"),
       queryOne<{n:string}>("SELECT COUNT(*) n FROM club_draft_spend_history WHERE is_fixture=FALSE"),
       queryOne<{n:string}>("SELECT COUNT(*) n FROM derived_metrics         WHERE is_fixture=FALSE"),
       queryOne<{n:string}>("SELECT COUNT(*) n FROM osm_research_findings   WHERE is_fixture=FALSE"),
       queryOne<{n:string}>("SELECT COUNT(*) n FROM diamondiq_inferences    WHERE is_fixture=FALSE"),
     ]);
-    const safetyNums = checks.map(r => parseInt(r?.n ?? "0"));
-    if (safetyNums.some(n => n > 0)) {
-      return res.status(409).json({
-        ok: false,
-        error: "Safety check failed: production tables are not empty.",
-        counts: {
-          club_payroll_history: safetyNums[0],
-          club_draft_spend_history: safetyNums[1],
-          derived_metrics: safetyNums[2],
-          osm_research_findings: safetyNums[3],
-          diamondiq_inferences: safetyNums[4],
-        },
-      });
-    }
+    const existingNums = existingCounts.map(r => parseInt(r?.n ?? "0"));
+    const isFirstImport = existingNums.every(n => n === 0);
 
-    // ── 3. Methodology version IDs ───────────────────────────────────────────
+    // ── 3. Methodology version IDs (first-import path only) ─────────────────
     const mvRows = await query<{id:number; name:string}>("SELECT id, name FROM methodology_versions");
     const mv: Record<string,number> = {};
     for (const r of mvRows) mv[r.name] = r.id;
@@ -1348,8 +1336,10 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
     const l4OverIds   = new Map<string, number>();
 
     // Counters
-    let l1Payroll = 0, l1Spend = 0, l2Count = 0, l3Count = 0, l4Count = 0, rsaCount = 0, rdCount = 0;
+    let l1Payroll = 0, l1Spend = 0, l2Count = 0, l3Count = 0, l4Count = 0;
+    let rsaCount = 0, rdCount = 0, leagueFactsCount = 0;
 
+    if (isFirstImport) {
     // ── SHEET 1: Payroll & CBT History ────────────────────────────────────────
     // Header at array index 3. Data rows from index 4.
     // Columns: 0=Club, 1=2021, 2=2022, 3=2023, 4=2024, 5=2025, 6=2026,
@@ -2088,13 +2078,311 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
       }
     }
 
+    } else {
+      // ── DEDUP COMMIT PATH ──────────────────────────────────────────────────
+      // All club-level production records already exist from a prior job.
+      // Write one source assertion per existing canonical record that appears
+      // in this workbook. League-level facts new to this workbook go to league_facts.
+
+      // ── Bulk-load existing canonical IDs ──────────────────────────────────
+      const [phRows, dhRows, dmRows, l3Rows, l4Rows] = await Promise.all([
+        client.query<{id:number; mlb_org:string; season:number}>(
+          `SELECT id, mlb_org, season FROM club_payroll_history WHERE is_fixture=FALSE`
+        ),
+        client.query<{id:number; mlb_org:string; draft_year:number}>(
+          `SELECT id, mlb_org, draft_year FROM club_draft_spend_history WHERE is_fixture=FALSE`
+        ),
+        client.query<{id:number; entity_key:string; metric_name:string}>(
+          `SELECT id, entity_key, metric_name FROM derived_metrics WHERE is_fixture=FALSE`
+        ),
+        client.query<{id:number; subject_key:string; subject_type:string; finding_type:string}>(
+          `SELECT id, subject_key, subject_type, finding_type FROM osm_research_findings WHERE is_fixture=FALSE`
+        ),
+        client.query<{id:number; subject_key:string; inference_type:string}>(
+          `SELECT id, subject_key, inference_type FROM diamondiq_inferences WHERE is_fixture=FALSE`
+        ),
+      ]);
+
+      const payrollMap  = new Map<string, number>();
+      for (const r of phRows.rows) payrollMap.set(`${r.mlb_org}::${r.season}`, r.id);
+
+      const spendMap    = new Map<string, number>();
+      for (const r of dhRows.rows) spendMap.set(`${r.mlb_org}::${r.draft_year}`, r.id);
+
+      const metricsMap  = new Map<string, number>();
+      for (const r of dmRows.rows) metricsMap.set(`${r.entity_key}::${r.metric_name}`, r.id);
+
+      const l3OrgMap    = new Map<string, number>(); // mlb_org findings
+      const l3NoteIds:  number[] = [];               // league research_notes in insertion order
+      for (const r of l3Rows.rows) {
+        if (r.subject_type === "mlb_org") {
+          l3OrgMap.set(`${r.subject_key}::${r.finding_type}`, r.id);
+        } else if (r.subject_type === "league" && r.finding_type === "research_note") {
+          l3NoteIds.push(r.id);
+        }
+      }
+
+      const l4Map       = new Map<string, number>();
+      for (const r of l4Rows.rows) l4Map.set(`${r.subject_key}::${r.inference_type}`, r.id);
+
+      // ── Helper: write one source assertion ────────────────────────────────
+      const writeRSA = async (
+        table: string, canonId: number | undefined,
+        worksheet: string, excelRow: number, excelCol: string,
+        preamble: string, assertedVal: string
+      ) => {
+        if (!canonId) return;
+        await client.query(
+          `INSERT INTO record_source_assertions
+             (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+              worksheet, excel_row, excel_column, source_preamble, asserted_value)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [table, canonId, sfvId, jobId, worksheet, excelRow, excelCol, preamble, assertedVal]
+        );
+        rsaCount++;
+      };
+
+      // ── SHEET 1: Payroll & CBT History ───────────────────────────────────
+      {
+        const rows = sheetRows("Payroll & CBT History");
+        const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+
+        for (let ri = 4; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const club = String(row[0] ?? "").trim();
+          if (!MLB_CLUBS.has(club)) continue;
+
+          // L1: 6 year-column values → club_payroll_history
+          for (let yi = 0; yi < YEARS.length; yi++) {
+            const val = row[yi + 1];
+            if (val === null || val === undefined || val === "") continue;
+            await writeRSA("club_payroll_history",
+              payrollMap.get(`${club}::${YEARS[yi]}`),
+              "Payroll & CBT History", ri + 1, String(YEARS[yi]), payrollPreamble, String(val));
+          }
+          // L2: avg_5yr_payroll (col 7)
+          const avgVal = row[7];
+          if (avgVal !== null && avgVal !== undefined && avgVal !== "") {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::avg_5yr_payroll`),
+              "Payroll & CBT History", ri + 1, "5-Yr Avg (21-25)", payrollPreamble, String(avgVal));
+          }
+          // L2: cagr_payroll_5yr (col 8)
+          const cagrVal = row[8];
+          if (cagrVal !== null && cagrVal !== undefined && cagrVal !== "") {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::cagr_payroll_5yr`),
+              "Payroll & CBT History", ri + 1, "5-Yr CAGR (21->25)", payrollPreamble, String(cagrVal));
+          }
+          // L2: times_over_cbt (col 9)
+          const timesVal = row[9];
+          if (timesVal !== null && timesVal !== undefined && timesVal !== "") {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::times_over_cbt`),
+              "Payroll & CBT History", ri + 1, "Times Over CBT Threshold (21-25)", payrollPreamble, String(timesVal));
+          }
+        }
+
+        // NEW: CBT Base Threshold → league_facts (array index 36 = Excel row 37)
+        const cbtRow = rows[36];
+        if (cbtRow && String(cbtRow[0] ?? "").includes("CBT Base Threshold")) {
+          const CBT_YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+          for (let yi = 0; yi < CBT_YEARS.length; yi++) {
+            const val = cbtRow[yi + 1];
+            if (val === null || val === undefined || val === "") continue;
+            await client.query(
+              `INSERT INTO league_facts
+                 (fact_type, season, numeric_value, evidence_class,
+                  dataset_id, source_file_version_id, ingestion_job_id,
+                  source_worksheet, source_excel_row, source_excel_column, source_preamble, is_fixture)
+               VALUES ('cbt_threshold',$1,$2,'verified_public',$3,$4,$5,$6,$7,$8,$9,FALSE)`,
+              [CBT_YEARS[yi], Number(val), datasetId, sfvId, jobId,
+               "Payroll & CBT History", 37, String(CBT_YEARS[yi]), payrollPreamble]
+            );
+            leagueFactsCount++;
+          }
+        }
+      }
+
+      // ── SHEET 2: Draft Spend History ─────────────────────────────────────
+      {
+        const rows = sheetRows("Draft Spend History");
+        const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+
+        for (let ri = 4; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const club = String(row[0] ?? "").trim();
+          if (!MLB_CLUBS.has(club)) continue;
+
+          // L1: 6 year-column values → club_draft_spend_history
+          for (let yi = 0; yi < YEARS.length; yi++) {
+            const val = row[yi + 1];
+            if (val === null || val === undefined || val === "") continue;
+            await writeRSA("club_draft_spend_history",
+              spendMap.get(`${club}::${YEARS[yi]}`),
+              "Draft Spend History", ri + 1, String(YEARS[yi]), spendPreamble, String(val));
+          }
+          // L2: avg_pool_5yr (col 7)
+          const avgPoolVal = row[7];
+          if (avgPoolVal !== null && avgPoolVal !== undefined && avgPoolVal !== "") {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::avg_pool_5yr`),
+              "Draft Spend History", ri + 1, "5-Yr Avg Pool (21-25)", spendPreamble, String(avgPoolVal));
+          }
+          // L2: cagr_pool_5yr (col 8)
+          const cagrPoolVal = row[8];
+          if (cagrPoolVal !== null && cagrPoolVal !== undefined && cagrPoolVal !== "") {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::cagr_pool_5yr`),
+              "Draft Spend History", ri + 1, "5-Yr CAGR (21->25)", spendPreamble, String(cagrPoolVal));
+          }
+          // L2: pool_rank (col 9)
+          const rankVal = row[9];
+          if (rankVal !== null && rankVal !== undefined && rankVal !== "") {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::pool_rank`),
+              "Draft Spend History", ri + 1, "2025 Rank (1=largest)", spendPreamble, String(rankVal));
+          }
+        }
+
+        // NEW: League-wide actual spend → league_facts (array index 36 = Excel row 37)
+        const actualRow = rows[36];
+        if (actualRow && String(actualRow[0] ?? "").includes("ACTUAL")) {
+          const SPEND_YEARS = [2021, 2022, 2023, 2024, 2025];
+          for (let yi = 0; yi < SPEND_YEARS.length; yi++) {
+            const val = actualRow[yi + 1];
+            if (val === null || val === undefined || val === "") continue;
+            await client.query(
+              `INSERT INTO league_facts
+                 (fact_type, season, numeric_value, evidence_class,
+                  dataset_id, source_file_version_id, ingestion_job_id,
+                  source_worksheet, source_excel_row, source_excel_column, source_preamble, is_fixture)
+               VALUES ('league_draft_actual_spend',$1,$2,'verified_public',$3,$4,$5,$6,$7,$8,$9,FALSE)`,
+              [SPEND_YEARS[yi], Number(val), datasetId, sfvId, jobId,
+               "Draft Spend History", 37, String(SPEND_YEARS[yi]), spendPreamble]
+            );
+            leagueFactsCount++;
+          }
+        }
+      }
+
+      // ── SHEET 3: Trend Analysis ───────────────────────────────────────────
+      {
+        const rows = sheetRows("Trend Analysis");
+
+        for (let ri = 4; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const club = String(row[0] ?? "").trim();
+          if (!MLB_CLUBS.has(club)) continue;
+
+          // L2: cbt_payroll_tier (col 2)
+          const cbtTier = row[2];
+          if (cbtTier !== null && cbtTier !== undefined && String(cbtTier).trim()) {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::cbt_payroll_tier`),
+              "Trend Analysis", ri + 1, "CBT Payroll Tier", trendPreamble, String(cbtTier));
+          }
+          // L2: times_penalty_proxy (col 4)
+          const penalty = row[4];
+          if (penalty !== null && penalty !== undefined && penalty !== "") {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::times_penalty_proxy`),
+              "Trend Analysis", ri + 1, "Times Picked-10-Spots Penalty (proxy)", trendPreamble, String(penalty));
+          }
+          // L2: draft_pool_tier (col 6)
+          const poolTier = row[6];
+          if (poolTier !== null && poolTier !== undefined && String(poolTier).trim()) {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::draft_pool_tier`),
+              "Trend Analysis", ri + 1, "Draft Pool Tier", trendPreamble, String(poolTier));
+          }
+          // L2: pct_vs_avg_pool (col 9)
+          const pct = row[9];
+          if (pct !== null && pct !== undefined && pct !== "") {
+            await writeRSA("derived_metrics",
+              metricsMap.get(`${club}::pct_vs_avg_pool`),
+              "Trend Analysis", ri + 1, "2026 Pool vs 5-Yr Avg Pool (%)", trendPreamble, String(pct));
+          }
+          // L3: correlation (col 7)
+          const corr = row[7];
+          if (corr !== null && corr !== undefined && String(corr).trim()) {
+            await writeRSA("osm_research_findings",
+              l3OrgMap.get(`${club}::correlation`),
+              "Trend Analysis", ri + 1, "Payroll <-> Draft Pool Correlation Direction", trendPreamble, String(corr));
+          }
+          // L3: pattern_read (col 10)
+          const read = row[10];
+          if (read !== null && read !== undefined && String(read).trim()) {
+            await writeRSA("osm_research_findings",
+              l3OrgMap.get(`${club}::pattern_read`),
+              "Trend Analysis", ri + 1, "Pattern / Read", trendPreamble, String(read));
+          }
+        }
+
+        // League research_notes — match by insertion order (same bullet order as Job #3)
+        let noteIdx = 0;
+        for (let ri = 36; ri < Math.min(rows.length, 50) && noteIdx < l3NoteIds.length; ri++) {
+          const cell = String(rows[ri]?.[0] ?? "").trim();
+          if (cell.startsWith("•") || cell.startsWith("KEY LEAGUE")) {
+            await writeRSA("osm_research_findings",
+              l3NoteIds[noteIdx],
+              "Trend Analysis", ri + 1, "A1", trendPreamble, cell.substring(0, 200));
+            noteIdx++;
+          }
+        }
+      }
+
+      // ── SHEET 4: 2026 Draft Projection ───────────────────────────────────
+      {
+        const rows = sheetRows("2026 Draft Projection");
+
+        for (let ri = 4; ri < rows.length; ri++) {
+          const row = rows[ri];
+          const club = String(row[0] ?? "").trim();
+          if (!MLB_CLUBS.has(club)) continue;
+
+          // L3: methodology_assumption (col 5)
+          const rate = row[5];
+          if (rate !== null && rate !== undefined && rate !== "") {
+            await writeRSA("osm_research_findings",
+              l3OrgMap.get(`${club}::methodology_assumption`),
+              "2026 Draft Projection", ri + 1, "Assumed Total-Spend-vs-Pool Rate (%)", projPreamble, String(rate));
+          }
+          // L4: draft_spend_projection (col 6)
+          const projSpend = row[6];
+          if (projSpend !== null && projSpend !== undefined && projSpend !== "") {
+            await writeRSA("diamondiq_inferences",
+              l4Map.get(`${club}::draft_spend_projection`),
+              "2026 Draft Projection", ri + 1, "Projected 2026 TOTAL Draft Spend ($)", projPreamble, String(projSpend));
+          }
+          // L4: pool_overage_projection (col 7)
+          const projAbove = row[7];
+          if (projAbove !== null && projAbove !== undefined && projAbove !== "") {
+            await writeRSA("diamondiq_inferences",
+              l4Map.get(`${club}::pool_overage_projection`),
+              "2026 Draft Projection", ri + 1, "Projected $ Above Pool (Rounds 11-20 + UDFA)", projPreamble, String(projAbove));
+          }
+          // L4: confidence_label (col 9)
+          const conf = row[9];
+          if (conf !== null && conf !== undefined && String(conf).trim()) {
+            await writeRSA("diamondiq_inferences",
+              l4Map.get(`${club}::confidence_label`),
+              "2026 Draft Projection", ri + 1, "Projection Confidence", projPreamble, String(conf));
+          }
+        }
+      }
+    } // end dedup commit path
+
     // ── UPDATE JOB STATUS ────────────────────────────────────────────────────
+    const totalNewRecords = isFirstImport
+      ? l1Payroll + l1Spend + l2Count + l3Count + l4Count
+      : leagueFactsCount;
     await client.query(
       `UPDATE ingestion_jobs
        SET status='complete', completed_at=NOW(),
            rows_imported=$1
        WHERE id=$2`,
-      [l1Payroll + l1Spend + l2Count + l3Count + l4Count, jobId]
+      [totalNewRecords, jobId]
     );
 
     // Update data_library processing status
@@ -2105,27 +2393,42 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
 
     await client.query("COMMIT");
 
-    return res.json({
-      ok: true,
-      data: {
-        jobId,
-        status: "complete",
-        layers: {
-          layer1: {
-            club_payroll_history: l1Payroll,
-            club_draft_spend_history: l1Spend,
-            total: l1Payroll + l1Spend,
+    if (isFirstImport) {
+      return res.json({
+        ok: true,
+        data: {
+          jobId,
+          status: "complete",
+          layers: {
+            layer1: {
+              club_payroll_history: l1Payroll,
+              club_draft_spend_history: l1Spend,
+              total: l1Payroll + l1Spend,
+            },
+            layer2: { derived_metrics: l2Count },
+            layer3: { osm_research_findings: l3Count },
+            layer4: { diamondiq_inferences: l4Count },
           },
-          layer2: { derived_metrics: l2Count },
-          layer3: { osm_research_findings: l3Count },
-          layer4: { diamondiq_inferences: l4Count },
+          totalProductionRecords: l1Payroll + l1Spend + l2Count + l3Count + l4Count,
+          sourceAssertions: rsaCount,
+          recordDerivations: rdCount,
+          mlbClubsProcessed: MLB_CLUBS.size,
         },
-        totalProductionRecords: l1Payroll + l1Spend + l2Count + l3Count + l4Count,
-        sourceAssertions: rsaCount,
-        recordDerivations: rdCount,
-        mlbClubsProcessed: MLB_CLUBS.size,
-      },
-    });
+      });
+    } else {
+      return res.json({
+        ok: true,
+        data: {
+          jobId,
+          status: "complete",
+          mode: "dedup",
+          newClubLevelCanonicalRecords: 0,
+          leagueFacts: leagueFactsCount,
+          sourceAssertions: rsaCount,
+          mlbClubsProcessed: MLB_CLUBS.size,
+        },
+      });
+    }
 
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

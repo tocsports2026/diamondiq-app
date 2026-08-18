@@ -421,6 +421,33 @@ export async function runMigrations() {
   await query(`CREATE INDEX IF NOT EXISTS idx_rsa_job
     ON record_source_assertions (ingestion_job_id)`);
 
+  // ── 6c. league_facts — verified-public league-level facts ─────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS league_facts (
+      id                     SERIAL PRIMARY KEY,
+      fact_type              TEXT NOT NULL,
+      season                 INTEGER NOT NULL,
+      numeric_value          NUMERIC(20,4),
+      text_value             TEXT,
+      evidence_class         TEXT NOT NULL DEFAULT 'verified_public'
+        CHECK (evidence_class IN ('verified_public','calculated','osm_proprietary','diamondiq_inference')),
+      dataset_id             INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+      source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+      ingestion_job_id       INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+      source_worksheet       TEXT,
+      source_excel_row       INTEGER,
+      source_excel_column    TEXT,
+      source_preamble        TEXT,
+      is_fixture             BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (fact_type, season, source_file_version_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_league_facts_type_season
+    ON league_facts (fact_type, season)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_league_facts_job
+    ON league_facts (ingestion_job_id)`);
+
   // ── 7. report_citations: add evidence_layer + methodology columns ──────────
   await query(`ALTER TABLE report_citations
     ADD COLUMN IF NOT EXISTS evidence_layer INTEGER
