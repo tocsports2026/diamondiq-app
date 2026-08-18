@@ -1,0 +1,74 @@
+I have selected the first real OSM production workbook for the DiamondIQ ingestion pipeline:
+
+2021-2026 MLB Draft Payroll and Draft Summaries.xlsx
+
+This workbook is part of the designated OSM DiamondIQ Google Drive research archive.
+
+Its structure includes these worksheets:
+
+- README
+- Payroll & CBT History
+- Draft Spend History
+- Trend Analysis
+- 2026 Draft Projection
+- Charts
+
+IMPORTANT: This workbook demonstrates why DiamondIQ cannot treat every spreadsheet cell as the same evidence type.
+
+The ingestion system must preserve distinctions between:
+
+1. SOURCE / VERIFIED FACTUAL DATA
+Examples include official historical payroll/CBT information, official draft bonus pools, and other factual source records contained in the workbook.
+
+2. CALCULATED RESULTS
+Derived calculations and trend analysis created from underlying source data must be stored as Calculated Results and retain provenance to the source records used in the calculation.
+
+3. ANALYSIS / PROJECTION
+Any projection, modeled conclusion, forecast, or analytical interpretation must NOT be ingested as Verified Public Information merely because it appears in an OSM workbook.
+
+4. DOCUMENTATION / METHODOLOGY
+README/methodology information should be preserved as dataset documentation and source metadata rather than treated as player/club factual records.
+
+5. CHARTS / PRESENTATION DATA
+Chart-support data should not create duplicate canonical factual records when the same underlying facts already exist elsewhere in the workbook.
+
+For this first ingestion implementation:
+
+- Build the schema/provenance foundation approved in the revised plan.
+- Build the XLSX ingestion/parser and staging workflow.
+- Detect all worksheets and their headers.
+- DO NOT automatically commit parsed rows to production tables.
+- First create an Admin preview/mapping stage showing what DiamondIQ detected.
+- Allow OSM Admin to classify/map each worksheet and its columns before import.
+- Preserve the original workbook and workbook version as immutable source provenance.
+- Preserve worksheet name and original row number for every imported record.
+- Prevent duplicate canonical facts when the same information appears in multiple worksheets.
+- Flag conflicting source values rather than silently selecting one.
+- Keep all imported records unverified until OSM reviews/approves them.
+- No imported data becomes athlete-visible merely because ingestion succeeded.
+- DEV fixtures must remain completely isolated and cannot be published.
+
+For THIS workbook specifically, do not assume the 2026 Draft Projection worksheet is wholly factual or wholly predictive. The worksheet may contain a mixture of verified inputs and calculated/projected outputs. Classification must be possible at the COLUMN/FIELD level where necessary.
+
+Likewise, Trend Analysis may contain calculated outputs based on verified underlying records. Those calculated values must retain lineage to their source dataset/version and, where technically feasible, the records or calculation inputs that produced them.
+
+The objective of this first workbook is to prove:
+
+SOURCE FILE
+→ PARSE
+→ STAGING
+→ ADMIN MAPPING/CLASSIFICATION
+→ VALIDATION
+→ PROVENANCE
+→ OSM REVIEW
+→ STRUCTURED PRODUCTION DATA
+
+NOT:
+
+SOURCE FILE → AI interprets spreadsheet → report.
+
+Do not use AI/model knowledge to fill missing spreadsheet values or infer factual records.
+
+Begin implementing Stages 1–5 of the approved revised architecture using this workbook structure as the first real ingestion case.
+
+Before importing any production rows, stop at the Admin mapping/preview stage and show me what DiamondIQ detected so I can review it.

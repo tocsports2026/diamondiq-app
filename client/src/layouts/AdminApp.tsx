@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import api from "../lib/api";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import AdminClients from "../pages/admin/AdminClients";
 import AdminAthletes from "../pages/admin/AdminAthletes";
 import AdminReportReview from "../pages/admin/AdminReportReview";
 import AdminIntelRequests from "../pages/admin/AdminIntelRequests";
 import AdminDataLibrary from "../pages/admin/AdminDataLibrary";
+import AdminIngestionReview from "../pages/admin/AdminIngestionReview";
 import AdminKnowledge from "../pages/admin/AdminKnowledge";
 import AdminNilManagement from "../pages/admin/AdminNilManagement";
 import AdminMethodology from "../pages/admin/AdminMethodology";
@@ -25,21 +25,39 @@ const NAV = [
 
 export default function AdminApp() {
   const { user, logout } = useAuth();
-  const [path, setPath] = useState("/admin");
+  const [path, setPath] = useState(window.location.pathname || "/admin");
+  const [ingestionJobId, setIngestionJobId] = useState<number | null>(null);
 
   const navigate = (p: string) => {
     setPath(p);
     window.history.pushState({}, "", p);
   };
 
+  const navigateIngestion = (jobId: number) => {
+    setIngestionJobId(jobId);
+    navigate(`/admin/ingestion/${jobId}`);
+  };
+
   function renderPage() {
+    // Ingestion review — dynamic job ID
+    if (path.startsWith("/admin/ingestion/")) {
+      const id = ingestionJobId ?? parseInt(path.split("/").pop() ?? "0");
+      if (id) {
+        return (
+          <AdminIngestionReview
+            jobId={id}
+            onBack={() => navigate("/admin/data")}
+          />
+        );
+      }
+    }
     switch (path) {
       case "/admin": return <AdminDashboard onNavigate={navigate} />;
       case "/admin/clients": return <AdminClients />;
       case "/admin/athletes": return <AdminAthletes onNavigate={navigate} />;
       case "/admin/reports": return <AdminReportReview onNavigate={navigate} />;
       case "/admin/requests": return <AdminIntelRequests />;
-      case "/admin/data": return <AdminDataLibrary />;
+      case "/admin/data": return <AdminDataLibrary onNavigateIngestion={navigateIngestion} />;
       case "/admin/knowledge": return <AdminKnowledge />;
       case "/admin/nil": return <AdminNilManagement />;
       case "/admin/methodology": return <AdminMethodology />;

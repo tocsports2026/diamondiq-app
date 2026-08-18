@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth";
 import athleteRoutes from "./routes/athletes";
 import reportRoutes from "./routes/reports";
 import adminRoutes from "./routes/admin";
+import ingestionRoutes from "./routes/ingestion";
 import knowledgeRoutes from "./routes/knowledge";
 import nilRoutes from "./routes/nil";
 import queryRoutes from "./routes/query";
@@ -40,6 +41,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/athletes", athleteRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin/ingestion", ingestionRoutes);
 app.use("/api/knowledge", knowledgeRoutes);
 app.use("/api/nil", nilRoutes);
 app.use("/api/query", queryRoutes);
@@ -66,6 +68,8 @@ if (process.env.NODE_ENV === "production") {
 async function start() {
   try {
     await initDb();
+    const { runMigrations } = await import("./db/migrate");
+    await runMigrations();
     const { seedIfEmpty } = await import("./db/seed");
     await seedIfEmpty();
     app.listen(PORT, "0.0.0.0", () => {

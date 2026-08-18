@@ -232,3 +232,164 @@ CREATE TABLE IF NOT EXISTS query_log (
   question_normalized TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- ============================================================
+-- INGESTION & PROVENANCE LAYER
+-- ============================================================
+
+-- Immutable record of every source file version ever imported.
+-- Re-importing an updated file creates a NEW row here; existing
+-- rows (and the records that reference them) are never mutated.
+CREATE TABLE IF NOT EXISTS source_file_versions (
+  id SERIAL PRIMARY KEY,
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  original_filename TEXT NOT NULL,
+  file_hash TEXT NOT NULL,         -- SHA-256 of the file bytes
+  file_size_bytes INTEGER,
+  file_type TEXT NOT NULL,         -- 'xlsx' | 'csv' | 'xls' | 'pdf' | 'docx'
+  imported_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  imported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  drive_file_id TEXT,              -- Google Drive file ID if Drive-sourced
+  drive_revision_id TEXT,          -- Drive internal revision ID
+  drive_modified_at TIMESTAMP,     -- Drive last-modified at time of import
+  row_count INTEGER,
+  notes TEXT
+);
+
+-- One row per import attempt (one attempt = one source file version).
+-- Tracks worksheet/column mapping decisions and processing status.
+CREATE TABLE IF NOT EXISTS ingestion_jobs (
+  id SERIAL PRIMARY KEY,
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  file_name TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  file_path TEXT,                  -- temp storage path on server
+  status TEXT NOT NULL DEFAULT 'preview'
+    CHECK (status IN ('preview','mapped','processing','complete','error','cancelled')),
+  total_rows INTEGER,
+  rows_imported INTEGER DEFAULT 0,
+  rows_skipped INTEGER DEFAULT 0,
+  rows_errored INTEGER DEFAULT 0,
+  started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMP,
+  triggered_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  parsed_structure JSONB,          -- worksheet names, headers, sample rows
+  column_map JSONB,                -- Admin's worksheet/column mapping decisions
+  notes TEXT
+);
+
+-- Per-row import errors for a job.
+CREATE TABLE IF NOT EXISTS ingestion_errors (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES ingestion_jobs(id) ON DELETE CASCADE,
+  worksheet_name TEXT,
+  source_row INTEGER,
+  error_type TEXT,
+  error_detail TEXT,
+  raw_row_data JSONB,
+  resolution TEXT NOT NULL DEFAULT 'pending'
+    CHECK (resolution IN ('pending','ignored','corrected'))
+);
+
+-- Canonical historical draft selection records.
+-- club_draft_history is NOT a separate table — club queries are
+-- SQL filters on this table (mlb_org, draft_year, pick range).
+CREATE TABLE IF NOT EXISTS draft_players (
+  id SERIAL PRIMARY KEY,
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  source_row INTEGER,
+  source_worksheet TEXT,
+  player_name TEXT NOT NULL,
+  draft_year INTEGER NOT NULL,
+  draft_round INTEGER,
+  draft_pick_overall INTEGER,
+  draft_pick_in_round INTEGER,
+  mlb_org TEXT,
+  position TEXT,
+  secondary_position TEXT,
+  bats VARCHAR(5),
+  throws VARCHAR(5),
+  height_in INTEGER,
+  weight_lbs INTEGER,
+  school TEXT,
+  school_type TEXT,                -- 'HS' | 'JC' | '4yr'
+  conference TEXT,
+  state TEXT,
+  country TEXT,
+  age_at_draft NUMERIC(4,1),
+  bonus_reported NUMERIC,          -- NULL = unreported, not zero
+  bonus_slot_value NUMERIC,
+  bonus_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  bonus_source TEXT,
+  signed BOOLEAN,
+  signing_date DATE,
+  career_outcome_summary TEXT,
+  source_provider TEXT,
+  import_date TIMESTAMP NOT NULL DEFAULT NOW(),
+  season_applies TEXT,
+  verification_status TEXT NOT NULL DEFAULT 'unverified'
+    CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
+  verified_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  verified_at TIMESTAMP,
+  conflict_flag BOOLEAN NOT NULL DEFAULT FALSE,
+  approved_record_id INTEGER REFERENCES draft_players(id) ON DELETE SET NULL,
+  osm_notes TEXT,
+  last_updated TIMESTAMP NOT NULL DEFAULT NOW(),
+  is_fixture BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Official MLB slot values by pick and year.
+CREATE TABLE IF NOT EXISTS slot_values (
+  id SERIAL PRIMARY KEY,
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  source_row INTEGER,
+  draft_year INTEGER NOT NULL,
+  pick_overall INTEGER NOT NULL,
+  slot_value_usd NUMERIC NOT NULL,
+  pool_eligible BOOLEAN DEFAULT TRUE,
+  source_provider TEXT,
+  import_date TIMESTAMP NOT NULL DEFAULT NOW(),
+  verification_status TEXT NOT NULL DEFAULT 'unverified'
+    CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
+  is_fixture BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Approved ranking source records.
+CREATE TABLE IF NOT EXISTS historical_rankings (
+  id SERIAL PRIMARY KEY,
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  source_row INTEGER,
+  player_name TEXT,
+  ranking_source TEXT NOT NULL,
+  ranking_year INTEGER,
+  ranking_date DATE,
+  rank_position INTEGER,
+  school TEXT,
+  position TEXT,
+  notes TEXT,
+  source_provider TEXT,
+  import_date TIMESTAMP NOT NULL DEFAULT NOW(),
+  verification_status TEXT NOT NULL DEFAULT 'unverified'
+    CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
+  conflict_flag BOOLEAN NOT NULL DEFAULT FALSE,
+  approved_record_id INTEGER,
+  is_fixture BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Links every factual claim in a published report to its source records.
+-- Every section that includes real data must have a citation before publish.
+CREATE TABLE IF NOT EXISTS report_citations (
+  id SERIAL PRIMARY KEY,
+  report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  section_id TEXT NOT NULL,
+  evidence_label TEXT NOT NULL,
+  source_table TEXT NOT NULL,
+  source_record_ids INTEGER[],
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  citation_note TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
