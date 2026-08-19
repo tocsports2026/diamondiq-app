@@ -1,0 +1,107 @@
+Task #7 pathway classification is approved.
+
+Before we close Task #7, fix ONE retrieval limitation exposed by the 2026 HS RHP test.
+
+DO NOT redesign the system.
+DO NOT create similarity scoring.
+DO NOT create new DiamondIQ inference.
+DO NOT proceed to Task #8 yet.
+
+ISSUE:
+
+The 2026 undrafted comparison workbook stores many pitchers as:
+
+Position = P
+
+while handedness is supplied separately in the source B/T field.
+
+As a result, an RHP or LHP research query currently excludes these source-backed undrafted pitcher records, creating an incomplete and biased comparison population.
+
+FIX:
+
+Extend draftRetrieval.ts so pitcher handedness can be determined deterministically from the stored source fields when:
+
+position = 'P'
+
+AND B/T is available.
+
+For B/T values formatted as BAT/THROW:
+
+- */R = right-handed pitcher
+- */L = left-handed pitcher
+
+Examples:
+R/R → throws right
+L/R → throws right
+R/L → throws left
+L/L → throws left
+S/R → throws right
+S/L → throws left
+
+This is NOT a model inference.
+
+It is a deterministic interpretation of an explicitly stored source field.
+
+Do not alter the original source position value.
+
+The database record may remain:
+position = P
+bats_throws = R/R, L/R, etc.
+
+The retrieval layer should simply recognize those rows as eligible for RHP/LHP filtering based on the THROW portion of B/T.
+
+RETRIEVAL RULES:
+
+For an RHP query, include:
+- RHS
+- RHR
+- P where source B/T explicitly shows throws R
+
+For an LHP query, include:
+- LHS
+- LHR
+- P where source B/T explicitly shows throws L
+
+Do not include a generic P row in an RHP/LHP query if B/T is missing or the throwing hand cannot be determined.
+
+Do not manufacture handedness.
+
+Then rerun the SAME Task #7 test:
+
+2026
+High School
+RHP
+
+Report the three/four pathways separately:
+
+1. Drafted
+2. Undrafted / signed as free agent
+3. Undrafted / continued amateur pathway
+4. Undrafted / no professional signing found
+
+For each pathway report:
+
+- exact record count
+- 5 sample players if available
+- player
+- source position
+- B/T
+- derived retrieval handedness
+- class
+- school
+- draft outcome
+- signing bonus if documented
+- provenance
+
+Also report:
+
+- how many undrafted P records entered the RHP result because B/T showed throws R
+- how many generic P records were excluded because throwing hand was unavailable
+- confirmation the underlying source records were NOT modified
+- fixture records used
+- model/general AI knowledge used
+- new inferences generated
+
+STOP THERE.
+
+Do not proceed to comparable-selection methodology or Task #8.

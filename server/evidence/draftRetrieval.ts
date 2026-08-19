@@ -203,6 +203,22 @@ function hasStoredAmateurEligibility(row: {
 }
 
 /**
+ * Derive pitcher handedness only from an explicit stored source field.
+ * Generic P rows are eligible for handedness-specific retrieval only when the
+ * source's parsed throwing hand is R or L; missing/other values remain unknown.
+ */
+function retrievalPitcherHandedness(row: {
+  position: string | null;
+  throws: string | null;
+}): "RHP" | "LHP" | null {
+  if (row.position === "RHS" || row.position === "RHR") return "RHP";
+  if (row.position === "LHS" || row.position === "LHR") return "LHP";
+  if (row.position === "P" && row.throws === "R") return "RHP";
+  if (row.position === "P" && row.throws === "L") return "LHP";
+  return null;
+}
+
+/**
  * Preserve source rows while giving reports a precise, human-readable pathway.
  *
  * Job #8's verified exact normalized-name matches live on the undrafted
@@ -291,8 +307,14 @@ export async function retrieveAndAssembleDraftReport(
    */
   function addPositionCondition(pos: string) {
     const upper = pos.trim().toUpperCase();
-    if (upper === "RHP") { conditions.push(`dp.position IN ('RHS', 'RHR')`); return; }
-    if (upper === "LHP") { conditions.push(`dp.position IN ('LHS', 'LHR')`); return; }
+    if (upper === "RHP") {
+      conditions.push(`(dp.position IN ('RHS', 'RHR') OR (dp.position = 'P' AND UPPER(TRIM(COALESCE(dp.throws, ''))) = 'R'))`);
+      return;
+    }
+    if (upper === "LHP") {
+      conditions.push(`(dp.position IN ('LHS', 'LHR') OR (dp.position = 'P' AND UPPER(TRIM(COALESCE(dp.throws, ''))) = 'L'))`);
+      return;
+    }
     if (upper === "SP")  { conditions.push(`dp.position IN ('RHS', 'LHS')`); return; }
     if (upper === "RP")  { conditions.push(`dp.position IN ('RHR', 'LHR')`); return; }
     if (upper === "P")   { conditions.push(`dp.position IN ('P', 'RHS', 'LHS', 'RHR', 'LHR', 'TWP')`); return; }
@@ -358,6 +380,8 @@ export async function retrieveAndAssembleDraftReport(
     // Player info
     player_name: string;
     position: string | null;
+    bats: string | null;
+    throws: string | null;
     school: string | null;
     school_type: string | null;
     player_class: string | null;
@@ -386,7 +410,8 @@ export async function retrieveAndAssembleDraftReport(
   }>(
     `SELECT dp.id,
             dp.draft_year, dp.draft_round, dp.draft_round_label, dp.draft_pick_overall,
-            dp.player_name, dp.position, dp.school, dp.school_type, dp.player_class,
+            dp.player_name, dp.position, dp.bats, dp.throws,
+            dp.school, dp.school_type, dp.player_class,
             dp.mlb_org,
             dp.mlb_rank, dp.mlbam_player_id,
             dp.outcome_group, dp.ndfa_match_status,
@@ -474,6 +499,9 @@ export async function retrieveAndAssembleDraftReport(
         pick: number | null;
         org: string | null;
         position: string | null;
+        source_position: string | null;
+        bats_throws: string | null;
+        derived_retrieval_handedness: "RHP" | "LHP" | null;
         school: string | null;
         player_class: string | null;
         outcome_group: string | null;
@@ -546,6 +574,9 @@ export async function retrieveAndAssembleDraftReport(
           pick: p.draft_pick_overall ?? null,
           org: p.mlb_org ?? null,
           position: p.position ?? null,
+          source_position: p.position ?? null,
+          bats_throws: p.bats && p.throws ? `${p.bats}/${p.throws}` : null,
+          derived_retrieval_handedness: retrievalPitcherHandedness(p),
           school: p.school ?? null,
           player_class: p.player_class ?? null,
           outcome_group: reportOutcome,
@@ -609,6 +640,7 @@ export async function retrieveAndAssembleDraftReport(
             "Undrafted / continued amateur pathway": "Player was not drafted, has no documented professional signing, and the stored player class explicitly supports a remaining amateur-school pathway. This describes pathway availability from stored eligibility data; it does not assert an enrollment decision.",
             "Undrafted / no professional signing found": "Player appears in the 2026 undrafted source population with no documented professional signing, but the stored eligibility/class data does not safely establish a continuing amateur pathway.",
           },
+          pitcherHandednessRule: "RHP queries include RHS/RHR plus source position P only when stored throws='R'. LHP queries include LHS/LHR plus source position P only when stored throws='L'. Generic P rows with missing or indeterminate throwing hand are excluded from handedness-specific queries. Source position and B/T values are not modified.",
           ndfaLinkage: {
             exactNormalizedNdfaLinks,
             separateNdfaSigningRows: separateNdfaRows.length,

@@ -17,3 +17,11 @@ The fourth label means only that no professional signing is documented in curren
 **Why:** Job #8 stores verified exact normalized-name NDFA links on the undrafted-population row itself, while unmatched and ambiguous NDFA signings remain separate source rows. The stored player class provides a factual basis for distinguishing clearly available amateur pathways from seniors, graduates, fifth-years, and unknown eligibility whose post-draft pathway is unresolved. Collapsing these states would erase source provenance and overstate what the data proves.
 
 **How to apply:** Reuse `ndfa_match_status` as an existing verified linkage rule, but also respect direct documented-signing fields already stored on the production row. Do not create a new name-matching, duplicate-merging, similarity, or prediction layer. Require at least one factual research filter before adding the undrafted population to a report, so an unscoped request cannot flood the report with the full population.
+
+## Pitcher handedness retrieval
+
+Generic undrafted source rows use `position = 'P'` while the throwing hand is stored separately. An RHP filter must include source `RHS`/`RHR` rows plus `P` rows only when stored `throws = 'R'`; an LHP filter follows the same rule with `LHS`/`LHR` and `throws = 'L'`.
+
+**Why:** Treating a generic `P` as either RHP or LHP without its explicit source throwing hand produces a biased comparison population and fabricates handedness.
+
+**How to apply:** Keep the canonical `position`, `bats`, and `throws` source values unchanged. Surface the source position, B/T, and deterministic retrieval handedness in report evidence. Do not include generic `P` rows with missing or indeterminate throwing hand in handedness-specific searches.
