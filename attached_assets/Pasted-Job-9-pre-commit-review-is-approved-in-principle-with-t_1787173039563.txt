@@ -1,0 +1,223 @@
+Job #9 pre-commit review is approved in principle, with the following required safeguards.
+
+Proceed with the MINIMAL schema additions necessary to preserve the source faithfully and then commit Job #9.
+
+Do NOT redesign unrelated architecture.
+Do NOT build comparable methodology.
+Do NOT create DiamondIQ inferences.
+Do NOT convert narrative notes into structured baseball facts.
+Do NOT silently resolve source conflicts.
+
+1. SOURCE UNIQUE ID
+
+Preserve the workbook's Unique ID as a SOURCE-SPECIFIC persistent player identifier.
+
+It must:
+- remain nullable
+- NOT be mapped to mlbam_player_id
+- NOT be treated as a universal DiamondIQ player ID
+- retain source-file/source-provider provenance
+- be capable of appearing on multiple draft-event rows for the same player across years
+
+The repeated IDs across years are valuable longitudinal evidence.
+
+Do not merge historical draft-event rows merely because they share the same source Unique ID. The repeated events are part of the player's historical pathway.
+
+2. PRESERVE HISTORICAL UNDRAFTED EVENTS
+
+The 18,142 source rows marked PICK = Undrafted are important historical outcome records.
+
+Do NOT discard them because the worksheet is named "2012-2025 Drafted."
+
+Preserve:
+- draft year
+- source player ID
+- player
+- position
+- school
+- state
+- class
+- height
+- weight
+- DOB
+- bats
+- throws
+- source round/pick label
+- age
+- rankings
+- college commitment
+- source notes where supplied
+- provenance
+
+For source rows explicitly labeled Undrafted, outcome_group may be source-backed as Undrafted.
+
+Do NOT infer whether those players subsequently signed professionally or returned to school unless another source establishes that outcome.
+
+3. SPECIAL ROUND LABELS
+
+Preserve raw source round labels such as:
+- CB-A
+- PPI
+- FA Comp
+- Undrafted
+- other nonnumeric labels
+
+Do not coerce them to numeric rounds.
+
+Use numeric draft_round only when the source round is actually numeric.
+
+Preserve the raw label in draft_round_label.
+
+4. NEW FACTUAL FIELDS
+
+Add only the minimal schema support required for:
+
+- source-specific Unique ID
+- draft_date
+- source-reported bonus_over_under
+- college_commitment
+- source-labeled public notes
+- slot round
+- slot drafting organization
+
+Public MLB Notes and BA Notes must remain distinguishable by provider.
+
+They must NOT be stored as osm_notes.
+
+5. PUBLIC RANKINGS
+
+Use historical_rankings for:
+- MLB
+- Perfect Game
+- Baseball America
+- FanGraphs
+
+Preserve:
+- player/source identity
+- ranking provider
+- ranking value
+- applicable draft/evaluation year
+- provenance
+
+Do not combine rankings from different providers into one ranking.
+
+6. 2026 PROSPECT SHEET
+
+Do not assign draft outcomes from this sheet.
+
+For the 486 single-name candidates:
+do NOT establish identity solely from normalized name if no stronger existing linkage exists.
+
+Use this sheet primarily as a factual profile/ranking source.
+
+Hold ambiguous identity relationships rather than guessing.
+
+7. HISTORICAL OVERLAP
+
+For the 591 exact historical event matches:
+- corroborate existing records through source assertions
+- do not duplicate canonical events
+- preserve raw source differences
+
+Do not silently overwrite differences in:
+- team formatting
+- position formatting
+- school formatting
+- other source values
+
+For the 24 same-year/pick name variants:
+HOLD FOR REVIEW.
+Do not automatically merge them.
+Do not automatically create them as unquestioned separate identities.
+
+For the 60 duplicate source-event groups:
+preserve all source provenance but create only one canonical event per established event identity.
+
+8. SLOT VALUES
+
+For the 310 exact pick/value matches:
+corroborate existing records.
+
+For the 300 blank source slot values:
+BLANK MEANS UNKNOWN/MISSING.
+Do not write $0.
+
+Preserve pick, round, and club where possible without inventing a slot value.
+
+For the 3 conflicting slot values:
+HOLD THE VALUE CONFLICT.
+Do not overwrite the existing canonical value.
+
+The conflicts are:
+Pick 54: source $1,085,300 vs existing $1,805,300
+Pick 76: source $110,350 vs existing $1,103,500
+Pick 181: source $346,600 vs existing $364,600
+
+9. ONE HISTORICAL ROW WITHOUT PLAYER NAME
+
+Do not create a canonical player record from the unnamed row.
+
+Preserve it as unresolved source data/provenance if the ingestion architecture supports that safely.
+
+10. COMMIT AND VERIFY
+
+After implementing only the required schema support, commit Job #9.
+
+Then verify and report:
+
+A. Job status
+
+B. New canonical historical draft-event records created
+
+C. Historical undrafted events created
+
+D. Existing events corroborated
+
+E. Duplicate source events collapsed without losing provenance
+
+F. Records held for identity review
+
+G. 2026 prospect profile records added/corroborated/held
+
+H. historical_rankings records created, broken down by:
+- MLB
+- PG
+- Baseball America
+- FanGraphs
+
+I. Coverage after commit for:
+- height
+- weight
+- DOB
+- bats
+- throws
+- class
+- school
+- state
+- position
+- draft year
+- round
+- overall pick
+- organization
+- bonus
+- slot
+- rankings
+- college commitment
+
+J. Number of persistent source Unique IDs stored
+
+K. Number of source IDs appearing across multiple draft years
+
+L. The 3 unresolved slot conflicts remain unresolved
+
+M. Blank slot values converted to $0 = 0
+
+N. Fixture records used = 0
+
+O. DiamondIQ inferences generated = 0
+
+P. Any ingestion errors
+
+STOP after verification.
+
+Do not proceed to comparable methodology.
