@@ -1,0 +1,144 @@
+DO NOT IMPLEMENT ANY NEW METHODOLOGY OR CODE.
+
+We are beginning methodology design using a real prospect as a test case.
+
+PLAYER PROVIDED BY OSM:
+
+Nathan Eisfelder
+Position: LF/RF
+Height: 6'2"
+Weight: 210
+Bats/Throws: R/R
+DOB: 2006-04-10
+Eligibility: Sophomore-eligible redshirt
+High school: IMG Academy
+High-school draft outcome: Undrafted
+Freshman college: Tennessee
+Current/next school: Indiana
+Summer 2026: Appalachian League
+OSM qualitative assessment: performed tremendously in the Appalachian League
+
+Treat the information above as OSM-provided information unless independently present in the production database.
+
+The phrase "performed tremendously" is an OSM qualitative assessment and must NOT be converted into a factual performance claim without underlying statistics.
+
+PURPOSE:
+
+Before designing comparable-player methodology, audit what DiamondIQ currently knows and what historical data is actually available to support comparisons for a player like Nathan.
+
+DO NOT:
+- create a similarity score
+- select best comps
+- create predictive probabilities
+- generate a draft projection
+- create new DiamondIQ inferences
+- modify the database
+- modify retrieval methodology
+- add schema
+- scrape/search the web
+- use general model baseball knowledge
+
+AUDIT ONLY.
+
+PART 1 — NATHAN RECORD
+
+Search production data for Nathan Eisfelder.
+
+Report exactly which production records, if any, already exist for him.
+
+For each record show:
+- table
+- source
+- draft year/evaluation year
+- player name
+- position
+- bats/throws
+- height
+- weight
+- DOB
+- age if explicitly stored
+- class/eligibility
+- school
+- prior school if stored
+- draft status
+- draft round/pick if applicable
+- MLB rank if available
+- signing information if applicable
+- summer league information if stored
+- performance statistics if stored
+- provenance
+
+Do not fill missing fields from the OSM profile supplied above.
+
+PART 2 — HISTORICAL FIELD COVERAGE
+
+Audit production player-level data and tell me whether DiamondIQ currently has historical fields that could support comparisons using:
+
+1. position
+2. OF sub-position (LF/CF/RF)
+3. bats
+4. throws
+5. height
+6. weight
+7. DOB
+8. calculated draft age from verified DOB
+9. player class
+10. redshirt status
+11. sophomore eligibility
+12. school
+13. previous school / transfer history
+14. high-school draft history
+15. prior undrafted status
+16. MLB/public ranking
+17. summer-league participation
+18. summer-league statistics
+19. college statistics
+20. conference
+21. signing bonus
+22. draft round
+23. overall pick
+24. drafted vs undrafted vs free-agent-signed outcome
+
+For EACH variable report:
+
+- Does a database field currently exist? YES/NO
+- Production records populated
+- Years represented
+- Percent coverage within applicable production player records
+- Source workbook/article if identifiable
+- Whether the field is factual source data, calculated data, OSM proprietary data, or unavailable
+
+PART 3 — WHAT CAN ACTUALLY BE COMPARED TODAY?
+
+Using ONLY the coverage audit, identify which Nathan characteristics could currently be used as:
+
+A. reliable cohort filters because historical coverage is strong
+B. possible comparison variables but coverage is incomplete
+C. currently unusable because historical data is absent or too sparse
+
+Do NOT decide weights.
+Do NOT decide similarity methodology.
+Do NOT select comparable players.
+
+PART 4 — DATA GAP PRIORITIES
+
+List the missing historical datasets that would materially improve a future Nathan-style comparable analysis.
+
+For example, if height/weight/DOB or summer performance are absent, state that.
+
+Do not propose building integrations yet.
+
+REPORT BACK ONLY WITH:
+
+1. Nathan records found
+2. Field coverage table
+3. Reliable fields today
+4. Partially usable fields
+5. Unavailable/insufficient fields
+6. Highest-value data gaps
+7. Fixture records encountered
+8. Any contradictions between OSM-provided Nathan information and existing production records
+
+STOP.
+
+No implementation changes.
