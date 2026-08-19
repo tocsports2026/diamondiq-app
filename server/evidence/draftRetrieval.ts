@@ -12,9 +12,16 @@
  *   L4  diamondiq_inference  (not used — retrieval only per Phase 1 design)
  *   Ext external_source_content (osm_article_transcription_lines)
  *
- * Scope note: This module queries drafted players and NDFA signings only.
- * The 2026 undrafted-population comparison feature (outcome_group = 'Undrafted')
- * is intentionally deferred to a separate retrieval path per task #7.
+ * Scope note: This module retrieves drafted players, documented free-agent signings,
+ * and the 2026 undrafted comparison population. Outcomes are source-driven:
+ * - Drafted
+ * - Undrafted / signed as free agent
+ * - Undrafted / continued amateur pathway
+ * - Undrafted / no professional signing found
+ *
+ * "No professional signing found" means no professional signing appears in
+ * the currently ingested production source data. It does not assert that the
+ * player did not sign elsewhere.
  */
 
 import { query } from "../db";
@@ -51,6 +58,10 @@ export interface DraftReportParams {
 
   /** School type filter (e.g. "HS", "College"). Applied against school_type column. */
   school_type?: string;
+  /** School-name filter. Applied against draft_players.school when supplied. */
+  school?: string;
+  /** Exact MLB rank or inclusive rank range, e.g. "25" or "1-100". */
+  mlbRank?: string;
 
   // Other legacy fields passed through buildVariablesSummary — captured but not filtered on.
   conference?: string;
@@ -90,7 +101,7 @@ export interface DraftReportContent {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fmt$(n: number | null | undefined): string {
+function fmt$(n: number | string | null | undefined): string {
   if (n == null) return "Unavailable";
   return "$" + Math.round(Number(n)).toLocaleString("en-US");
 }
@@ -127,6 +138,95 @@ function parseDraftYears(raw: string | undefined): number[] {
 }
 
 /**
+ * Parse a source-rank filter. It accepts a single rank ("25") or inclusive
+ * numeric range ("1-100"). Invalid values deliberately do not create a filter.
+ */
+function parseRankFilter(raw: string | undefined): { min: number; max: number } | null {
+  if (!raw || !raw.trim()) return null;
+  const cleaned = raw.replace(/#/g, "").trim();
+  const range = cleaned.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  if (range) {
+    const min = Number(range[1]);
+    const max = Number(range[2]);
+    return min > 0 && max >= min ? { min, max } : null;
+  }
+  const exact = cleaned.match(/^\d+$/);
+  if (!exact) return null;
+  const value = Number(cleaned);
+  return value > 0 ? { min: value, max: value } : null;
+}
+
+type RetrievalOutcome =
+  | "Drafted"
+  | "Undrafted / signed as free agent"
+  | "Undrafted / continued amateur pathway"
+  | "Undrafted / no professional signing found";
+
+/**
+ * A documented professional-signing signal must be present before classifying
+ * an undrafted athlete as a free-agent signing. The source row may establish
+ * that through a linked NDFA record, or through direct signing fields already
+ * stored on the production record.
+ */
+function hasDocumentedProfessionalSigning(row: {
+  outcome_group: string | null;
+  ndfa_match_status: string | null;
+  signed: boolean | null;
+  signing_date: string | null;
+  bonus_reported: string | null;
+  mlb_org: string | null;
+}): boolean {
+  const exactNormalizedLink = row.ndfa_match_status === "Exact normalized name match"
+    || row.ndfa_match_status === "Exact normalized player-name match";
+  return row.outcome_group === "Undrafted / NDFA"
+    || exactNormalizedLink
+    || row.signed === true
+    || row.signing_date != null
+    || row.bonus_reported != null
+    || row.mlb_org != null;
+}
+
+/**
+ * Returns true only when the stored player class explicitly supports an
+ * available amateur-school pathway. It is intentionally conservative:
+ * seniors, graduates, fifth-years, unspecified, and missing classes remain
+ * unresolved rather than being described as returning to school.
+ */
+function hasStoredAmateurEligibility(row: {
+  player_class: string | null;
+  school_type: string | null;
+}): boolean {
+  const playerClass = row.player_class?.trim().toUpperCase() || "";
+  if (!playerClass) return false;
+  if (row.school_type === "HS" || playerClass.startsWith("HS ")) return true;
+  return ["4YR SO", "4YR JR", "JC J1", "JC J2", "JC J3"].includes(playerClass);
+}
+
+/**
+ * Preserve source rows while giving reports a precise, human-readable pathway.
+ *
+ * Job #8's verified exact normalized-name matches live on the undrafted
+ * population row itself; those records remain source outcome_group='Undrafted'
+ * but carry a documented professional-signing signal. They are therefore
+ * presented as signed free agents without inserting or merging any record.
+ */
+function retrievalOutcomeFor(row: {
+  outcome_group: string | null;
+  ndfa_match_status: string | null;
+  signed: boolean | null;
+  signing_date: string | null;
+  bonus_reported: string | null;
+  mlb_org: string | null;
+  player_class: string | null;
+  school_type: string | null;
+}): RetrievalOutcome {
+  if (row.outcome_group === "Drafted") return "Drafted";
+  if (hasDocumentedProfessionalSigning(row)) return "Undrafted / signed as free agent";
+  if (hasStoredAmateurEligibility(row)) return "Undrafted / continued amateur pathway";
+  return "Undrafted / no professional signing found";
+}
+
+/**
  * Build a human-readable summary of applied research parameters for display.
  */
 function buildParamsSummary(params: DraftReportParams): string {
@@ -135,9 +235,10 @@ function buildParamsSummary(params: DraftReportParams): string {
   if (cls) lines.push(`Player class: ${cls}`);
   if (params.position) lines.push(`Position: ${params.position}`);
   if (params.school_type) lines.push(`School type: ${params.school_type}`);
+  if (params.school) lines.push(`School: ${params.school}`);
   if (params.conference) lines.push(`Conference: ${params.conference}`);
   if (params.draftYears) lines.push(`Draft years: ${params.draftYears}`);
-  if (params.rankingRange) lines.push(`Ranking range: ${params.rankingRange}`);
+  if (params.mlbRank || params.rankingRange) lines.push(`MLB rank: ${params.mlbRank || params.rankingRange}`);
   if (params.heightRange) lines.push(`Height range: ${params.heightRange}`);
   if (params.weightRange) lines.push(`Weight range: ${params.weightRange}`);
   return lines.length > 0 ? lines.join(" · ") : "No specific filters applied — returning all available draft records.";
@@ -155,12 +256,27 @@ export async function retrieveAndAssembleDraftReport(
   const tablesQueried: string[] = [];
   const recordsByTable: Record<string, number> = {};
 
+  const cls = params.player_class || params.level;
+  const draftYearList = parseDraftYears(params.draftYears);
+  const rankFilter = parseRankFilter(params.mlbRank || params.rankingRange);
+  const comparisonFiltersApplied = Boolean(
+    params.position ||
+    cls ||
+    params.school_type ||
+    params.school ||
+    draftYearList.length ||
+    rankFilter
+  );
+
   // ── Build dynamic WHERE conditions ────────────────────────────────────────
-  const conditions: string[] = [
-    "dp.is_fixture = FALSE",
-    // Exclude undrafted-only population — that's task #7 scope
-    "dp.outcome_group IN ('Drafted', 'Undrafted / NDFA')",
-  ];
+  const conditions: string[] = ["dp.is_fixture = FALSE"];
+  if (comparisonFiltersApplied) {
+    // Do not flood an unscoped report with the full undrafted population.
+    // Factual filters are required before comparison-population rows enter it.
+    conditions.push("dp.outcome_group IN ('Drafted', 'Undrafted / NDFA', 'Undrafted')");
+  } else {
+    conditions.push("dp.outcome_group IN ('Drafted', 'Undrafted / NDFA')");
+  }
   const sqlParams: unknown[] = [];
 
   function addCondition(sql: string, value: unknown) {
@@ -179,7 +295,7 @@ export async function retrieveAndAssembleDraftReport(
     if (upper === "LHP") { conditions.push(`dp.position IN ('LHS', 'LHR')`); return; }
     if (upper === "SP")  { conditions.push(`dp.position IN ('RHS', 'LHS')`); return; }
     if (upper === "RP")  { conditions.push(`dp.position IN ('RHR', 'LHR')`); return; }
-    if (upper === "P")   { conditions.push(`dp.position IN ('RHS', 'LHS', 'RHR', 'LHR', 'TWP')`); return; }
+    if (upper === "P")   { conditions.push(`dp.position IN ('P', 'RHS', 'LHS', 'RHR', 'LHR', 'TWP')`); return; }
     if (upper === "OF")  { conditions.push(`dp.position IN ('OF', 'CF', 'LF', 'RF')`); return; }
     // Exact DB code or partial — use ILIKE
     addCondition("dp.position ILIKE $?", `%${pos}%`);
@@ -191,7 +307,6 @@ export async function retrieveAndAssembleDraftReport(
   }
 
   // Player class filter (player_class or level — same column)
-  const cls = params.player_class || params.level;
   if (cls) {
     addCondition("dp.player_class ILIKE $?", `%${cls}%`);
   }
@@ -201,8 +316,12 @@ export async function retrieveAndAssembleDraftReport(
     addCondition("dp.school_type ILIKE $?", `%${params.school_type}%`);
   }
 
+  // School-name filter
+  if (params.school) {
+    addCondition("dp.school ILIKE $?", `%${params.school}%`);
+  }
+
   // Draft years filter
-  const draftYearList = parseDraftYears(params.draftYears);
   if (draftYearList.length > 0) {
     // Build parameterized IN list
     const placeholders = draftYearList.map(() => {
@@ -215,6 +334,12 @@ export async function retrieveAndAssembleDraftReport(
       sqlParams[startIdx + i] = draftYearList[i];
     }
     conditions.push(`dp.draft_year IN (${placeholders.join(", ")})`);
+  }
+
+  // Rank filter only includes records where the source provides an MLB rank.
+  if (rankFilter) {
+    sqlParams.push(rankFilter.min, rankFilter.max);
+    conditions.push(`dp.mlb_rank BETWEEN $${sqlParams.length - 1} AND $${sqlParams.length}`);
   }
 
   const whereClause = conditions.join(" AND ");
@@ -337,17 +462,12 @@ export async function retrieveAndAssembleDraftReport(
     evidenceLabel: "OSM-Provided Athlete Information",
   });
 
-  // ── Section 2: Historical Draft Records ──────────────────────────────────
+  // ── Section 2: Historical Draft & Undrafted Comparison Records ───────────
   if (draftPlayerRows.length > 0) {
-    // Group by year
-    const byYear: Record<number, typeof draftPlayerRows> = {};
-    for (const r of draftPlayerRows) {
-      if (!byYear[r.draft_year]) byYear[r.draft_year] = [];
-      byYear[r.draft_year].push(r);
-    }
-
-    const yearBlocks: Array<{
+    const outcomeGroups: Array<{
+      outcome: RetrievalOutcome;
       label: string;
+      count: number;
       rows: Array<{
         player: string;
         round: string | null;
@@ -357,12 +477,22 @@ export async function retrieveAndAssembleDraftReport(
         school: string | null;
         player_class: string | null;
         outcome_group: string | null;
+        source_outcome_group: string | null;
         ndfa_status: string | null;
+        professional_signing_documented: boolean;
+        amateur_pathway_supported_by_source: boolean;
         mlb_rank: number | null;
         slot_value: string | null;
         signing_bonus: string | null;
         signing_date: string | null;
         source: string;
+        provenance: {
+          ingestion_job_id: number;
+          source_filename: string;
+          source_worksheet: string | null;
+          source_row: number | null;
+          source_file_version_id: number | null;
+        };
       }>;
     }> = [];
 
@@ -370,15 +500,29 @@ export async function retrieveAndAssembleDraftReport(
     const jobsSeen = new Set<number>();
     const slotJobsSeen = new Set<number>();
 
-    for (const yr of Object.keys(byYear).map(Number).sort((a, b) => b - a)) {
-      const players = byYear[yr];
+    const outcomeOrder: RetrievalOutcome[] = [
+      "Drafted",
+      "Undrafted / signed as free agent",
+      "Undrafted / continued amateur pathway",
+      "Undrafted / no professional signing found",
+    ];
+    const outcomeLabels: Record<RetrievalOutcome, string> = {
+      Drafted: "Drafted",
+      "Undrafted / signed as free agent": "Undrafted / signed as free agent",
+      "Undrafted / continued amateur pathway": "Undrafted / continued amateur pathway",
+      "Undrafted / no professional signing found": "Undrafted / no professional signing found",
+    };
+
+    for (const outcome of outcomeOrder) {
+      const players = draftPlayerRows.filter((p) => retrievalOutcomeFor(p) === outcome);
       const rows = players.map((p) => {
+        const reportOutcome = retrievalOutcomeFor(p);
         // Round label
         const round = p.draft_round_label
           ? `Rd. ${p.draft_round_label}`
           : p.draft_round != null
           ? `Rd. ${p.draft_round}`
-          : p.outcome_group === "Undrafted / NDFA"
+          : reportOutcome === "Undrafted / signed as free agent"
           ? "NDFA"
           : null;
 
@@ -404,45 +548,80 @@ export async function retrieveAndAssembleDraftReport(
           position: p.position ?? null,
           school: p.school ?? null,
           player_class: p.player_class ?? null,
-          outcome_group: p.outcome_group ?? null,
+          outcome_group: reportOutcome,
+          source_outcome_group: p.outcome_group ?? null,
           ndfa_status: p.ndfa_match_status ?? null,
+          professional_signing_documented: hasDocumentedProfessionalSigning(p),
+          amateur_pathway_supported_by_source: !hasDocumentedProfessionalSigning(p) && hasStoredAmateurEligibility(p),
           mlb_rank: p.mlb_rank ?? null,
           slot_value,
           signing_bonus,
           signing_date: p.signing_date ?? null,
           source,
+          provenance: {
+            ingestion_job_id: p.ingestion_job_id,
+            source_filename: sfvLabel,
+            source_worksheet: p.source_worksheet ?? null,
+            source_row: p.source_row ?? null,
+            source_file_version_id: p.source_file_version_id ?? null,
+          },
         };
       });
 
-      const drafted = players.filter((p) => p.outcome_group === "Drafted").length;
-      const ndfa = players.filter((p) => p.outcome_group === "Undrafted / NDFA").length;
-      yearBlocks.push({
-        label: `${yr} — ${drafted} pick${drafted !== 1 ? "s" : ""}${ndfa > 0 ? `, ${ndfa} NDFA` : ""}`,
+      outcomeGroups.push({
+        outcome,
+        label: outcomeLabels[outcome],
+        count: rows.length,
         rows,
       });
     }
 
-    // Count fields present vs missing
-    const missingBonus = draftPlayerRows.filter((r) => r.outcome_group === "Drafted" && r.bonus_reported == null).length;
-    const missingRank  = draftPlayerRows.filter((r) => r.mlb_rank == null).length;
-    const missingSlot  = draftPlayerRows.filter((r) => r.outcome_group === "Drafted" && r.slot_value_usd == null).length;
+    const missingFieldsByOutcome = Object.fromEntries(
+      outcomeOrder.map((outcome) => {
+        const rows = draftPlayerRows.filter((r) => retrievalOutcomeFor(r) === outcome);
+        return [outcome, {
+          school: rows.filter((r) => !r.school || !r.school.trim()).length,
+          player_class: rows.filter((r) => !r.player_class || !r.player_class.trim()).length,
+          position: rows.filter((r) => !r.position || !r.position.trim()).length,
+          mlb_rank: rows.filter((r) => r.mlb_rank == null).length,
+        }];
+      })
+    );
+    const exactNormalizedNdfaLinks = draftPlayerRows.filter(
+      (r) => r.outcome_group === "Undrafted" &&
+        r.ndfa_match_status === "Exact normalized player-name match"
+    ).length;
+    const separateNdfaRows = draftPlayerRows.filter(
+      (r) => r.outcome_group === "Undrafted / NDFA"
+    );
 
     sections.push({
-      id: "historical_draft_records",
-      title: "Historical Draft Records",
+      id: "historical_draft_and_undrafted_records",
+      title: "Historical Draft & Undrafted Comparison Records",
       content: {
         type: "draft_player_records",
         data: {
-          note: `${draftPlayerRows.length} player record${draftPlayerRows.length !== 1 ? "s" : ""} retrieved from production database. Source-provided signing bonuses only — no estimates or inferences. Slot values from MLB slot assignment records where available.`,
-          yearBlocks,
+          note: `${draftPlayerRows.length} player record${draftPlayerRows.length !== 1 ? "s" : ""} retrieved from production database. Outcomes remain source-driven; "no professional signing found" means no professional signing is documented in currently available production sources, not that a player definitively did not sign.`,
+          outcomeGroups,
+          outcomeDefinitions: {
+            Drafted: "Player was selected in the MLB Draft.",
+            "Undrafted / signed as free agent": "Player was not drafted and has a documented professional free-agent signing in the production record, either on a separate source row or through an existing verified NDFA linkage.",
+            "Undrafted / continued amateur pathway": "Player was not drafted, has no documented professional signing, and the stored player class explicitly supports a remaining amateur-school pathway. This describes pathway availability from stored eligibility data; it does not assert an enrollment decision.",
+            "Undrafted / no professional signing found": "Player appears in the 2026 undrafted source population with no documented professional signing, but the stored eligibility/class data does not safely establish a continuing amateur pathway.",
+          },
+          ndfaLinkage: {
+            exactNormalizedNdfaLinks,
+            separateNdfaSigningRows: separateNdfaRows.length,
+            separateNdfaNoExactMatchRows: separateNdfaRows.filter((r) => r.ndfa_match_status === "No exact-name match — not linked").length,
+            separateNdfaAmbiguousMatchRows: separateNdfaRows.filter((r) => r.ndfa_match_status === "Ambiguous exact-name match — not linked").length,
+            rule: "A player is shown as signed only when the production row contains a documented signing signal: source outcome_group='Undrafted / NDFA', existing exact normalized-name linkage, signed=true, signing date, reported bonus, or linked MLB organization. Ambiguous and no-exact-match NDFA rows stay separate; no new matching or merging is performed during retrieval.",
+          },
           fieldCoverage: {
             totalRecords: draftPlayerRows.length,
             withSigningBonus: draftPlayerRows.filter((r) => r.bonus_reported != null).length,
-            withoutSigningBonus: missingBonus,
             withSlotValue: slotHits,
-            withoutSlotValue: missingSlot,
             withMlbRank: draftPlayerRows.filter((r) => r.mlb_rank != null).length,
-            withoutMlbRank: missingRank,
+            missingFieldsByOutcome,
           },
         },
       },
@@ -526,9 +705,9 @@ export async function retrieveAndAssembleDraftReport(
   } else {
     // No records returned
     dataGaps.push(
-      params.position || params.player_class || params.level || params.draftYears
-        ? `No drafted player records found matching the applied filters (${buildParamsSummary(params)}).`
-        : "No drafted player records found in the production database for this query."
+      params.position || params.player_class || params.level || params.draftYears || params.school || params.school_type
+        ? `No player-level draft or undrafted records found matching the applied filters (${buildParamsSummary(params)}).`
+        : "No player-level draft records found in the production database for this query."
     );
   }
 
@@ -558,8 +737,9 @@ export async function retrieveAndAssembleDraftReport(
     `Applied filters: ${filterDesc}`,
     `Data sources: draft_players (${recordsByTable["draft_players"] ?? 0} records), slot_values (${recordsByTable["slot_values"] ?? 0} matched).`,
     `All records verified via is_fixture = FALSE guard.`,
-    `Scope: drafted players and NDFA signings only (outcome_group IN ('Drafted', 'Undrafted / NDFA')).`,
-    `Undrafted population (task #7 scope) intentionally excluded.`,
+    comparisonFiltersApplied
+      ? `Scope: drafted players, documented free-agent signings, and matching undrafted population records separated by stored signing and eligibility facts.`
+      : `Scope: drafted players and documented free-agent signings only; undrafted comparison rows require at least one factual filter to avoid flooding an unscoped report.`,
     `No model/AI baseball knowledge was used. No new inferences were generated.`,
     `Evidence class: verified_public (Layer 1). Bonus range is a calculated aggregate of source-provided values.`,
   ].join(" ");

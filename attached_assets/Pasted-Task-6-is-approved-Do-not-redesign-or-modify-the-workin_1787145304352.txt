@@ -1,0 +1,195 @@
+Task #6 is approved. Do not redesign or modify the working draft retrieval architecture unless required for Task #7.
+
+Proceed ONLY with Task #7: integrate the 2026 undrafted comparison population into the existing player-level evidence retrieval system.
+
+PURPOSE
+
+The undrafted population is a core part of DiamondIQ.
+
+When evaluating a future draft prospect, we need to understand not only players who were drafted, but also comparable players who:
+
+1. were drafted,
+2. went undrafted but signed as an NDFA, and
+3. went undrafted and have no documented professional signing in our source data.
+
+These outcomes MUST remain distinct.
+
+This step is retrieval integration only.
+
+Do NOT create a new predictive model.
+Do NOT create new DiamondIQ inferences.
+Do NOT redesign the report system.
+Do NOT modify the existing 2026 projection records.
+
+--------------------------------------------------
+A. PRESERVE OUTCOME DISTINCTIONS
+--------------------------------------------------
+
+The retrieval system must distinguish at minimum:
+
+DRAFTED
+Player was selected in the MLB Draft.
+
+UNDRAFTED / NDFA SIGNED
+Player was not drafted but has a documented NDFA professional signing in our source data.
+
+UNDRAFTED / NO DOCUMENTED SIGNING
+Player appears in the 2026 undrafted comparison population and we do not have a documented professional signing for that player.
+
+IMPORTANT:
+
+"No documented signing" does NOT mean the player definitively did not sign.
+
+It means only that no professional signing is documented in the production source data currently available to DiamondIQ.
+
+Do not infer outcomes beyond the source records.
+
+--------------------------------------------------
+B. USE THE EXISTING 2026 UNDRAFTED POPULATION
+--------------------------------------------------
+
+Integrate the 1,724-player 2026 undrafted comparison population already stored from Job #8 into draftRetrieval.ts.
+
+Do not duplicate these records.
+
+Use only:
+is_fixture = FALSE
+
+Preserve all source fields and provenance currently stored.
+
+--------------------------------------------------
+C. RETRIEVAL BEHAVIOR
+--------------------------------------------------
+
+The retrieval module should be capable of filtering the undrafted population using the same relevant factual characteristics available for drafted players, where those fields actually exist.
+
+Examples include:
+
+- position
+- player class
+- school
+- draft year
+- MLB rank, if available
+- other factual source fields already stored in draft_players
+
+Do not invent missing attributes.
+
+Do not treat missing values as zero, false, unranked, unsigned, or any other substantive value unless the source explicitly supports that interpretation.
+
+--------------------------------------------------
+D. DO NOT AUTOMATICALLY FLOOD REPORTS
+--------------------------------------------------
+
+The existence of 1,724 undrafted players should NOT cause all 1,724 records to appear in a prospect report.
+
+The retrieval system should first apply the factual filters supplied by the report/research parameters.
+
+Return the matching comparison population.
+
+Report how many records matched.
+
+Do not introduce a similarity score, weighting system, nearest-neighbor model, or AI-selected "best comparables" yet.
+
+We first need to inspect the factual comparison pool before designing any comparable-selection methodology.
+
+--------------------------------------------------
+E. PROVENANCE
+--------------------------------------------------
+
+Every returned undrafted record must retain its source provenance exactly as the drafted-player records do.
+
+At minimum preserve:
+
+- ingestion job
+- source filename
+- source worksheet
+- source row
+- source fields available on the record
+
+If an NDFA signing and an undrafted-population record refer to the same athlete, do NOT silently merge them unless there is an existing verified identifier or matching rule supporting the linkage.
+
+If the system already has a verified match through ndfa_match_status or another stored field, explain how that linkage works.
+
+--------------------------------------------------
+F. TEST
+--------------------------------------------------
+
+After implementation, run ONE internal test using the SAME factual profile used in Task #6:
+
+High school right-handed pitchers
+Draft year: 2026
+
+This time retrieve and report the three outcome groups separately:
+
+1. Drafted
+2. Undrafted / NDFA signed
+3. Undrafted / no documented signing
+
+Do not use 2025 for this test because the undrafted comparison population currently being integrated is specifically the 2026 population.
+
+Do not generate an inference about the prospect's likelihood of being drafted.
+
+Do not rank the players by similarity.
+
+Do not select "best comps."
+
+This test is intended to show us the raw evidence population available for future methodology development.
+
+--------------------------------------------------
+G. REPORT BACK
+--------------------------------------------------
+
+Report back concisely with:
+
+1. What code/functionality changed
+
+2. Exact number of 2026 HS RHP records in each group:
+   - Drafted
+   - Undrafted / NDFA signed
+   - Undrafted / no documented signing
+
+3. Total comparison population returned
+
+4. Sample of 5 records from EACH outcome group, if at least 5 exist
+
+For each sample show available:
+- player
+- position
+- class
+- school
+- MLB rank
+- draft pick/round if drafted
+- signing bonus if documented
+- outcome group
+- source
+
+5. Explain exactly how NDFA-signed players are distinguished from undrafted players with no documented signing.
+
+6. Number of records with missing:
+- school
+- player_class
+- position
+- MLB rank
+
+Do not fill these values.
+
+7. Duplicate or possible-match count between the NDFA signing population and the broader undrafted population.
+
+Explain the matching rule used.
+
+8. Confirm provenance exists on every returned record.
+
+9. Fixture records used.
+
+10. Model/general AI baseball knowledge used.
+
+11. New DiamondIQ inferences generated.
+
+12. Internal report/test reference, if one is created.
+
+STOP THERE.
+
+Do not proceed to Task #8.
+Do not create comparable-selection methodology.
+Do not create similarity scoring.
+Do not modify the UI beyond what is minimally necessary to inspect this test.

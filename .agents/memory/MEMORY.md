@@ -1,2 +1,3 @@
 - [Vite + Tailwind monorepo setup](vite-tailwind-setup.md) — postcss config path, tailwind content globs, and Vite root alias must all be workspace-root-relative; react must be installed explicitly.
-- [Ingestion & Provenance Layer](ingestion-provenance-layer.md) — schema, pipeline, and all key architecture decisions for the data-first ingestion system; Stage 5 (commit) intentionally not yet built.
+- [Ingestion & Provenance Layer](ingestion-provenance-layer.md) — schema, pipeline, and key decisions for the data-first ingestion system, including all active commit paths.
+- [Draft outcome retrieval](draft-outcome-retrieval.md) — source outcome groups and verified NDFA link statuses must remain distinct in prospect-report evidence.
