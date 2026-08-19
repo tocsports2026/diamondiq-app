@@ -1,0 +1,125 @@
+CORRECTION: The previous audit stopped because you interpreted "production database" to mean a separately deployed Replit production database.
+
+That is NOT what I intended.
+
+Throughout this project, we have used "production data" to mean the REAL, NON-FIXTURE records already ingested into the database attached to this Repl.
+
+You have already queried this database successfully in the immediately preceding tests, including:
+
+- Jobs #3, #4, #5, #6, #7 and #8
+- 613 drafted 2026 players
+- 1,724 undrafted 2026 players
+- 135 NDFA signing records
+- 2025 player-level draft/signing records
+- club payroll and draft-spend records
+- article corpus records
+- DIQ-35407CFF
+- DIQ-8E933FCB
+- DIQ-30092D60
+
+DIQ-30092D60 specifically retrieved 210 real, non-fixture 2026 HS RHP records from this database.
+
+Therefore, rerun the Nathan Eisfelder DATA-COVERAGE AUDIT against the CURRENT REPL DATABASE containing those real ingested records.
+
+Use:
+is_fixture = FALSE
+
+Do NOT require deployment.
+Do NOT create a new database.
+Do NOT migrate or copy data.
+Do NOT modify records.
+Do NOT implement methodology.
+Do NOT search the web.
+Do NOT use general model baseball knowledge.
+
+This remains READ-ONLY AUDIT WORK.
+
+PLAYER PROVIDED BY OSM:
+
+Nathan Eisfelder
+LF/RF
+6'2", 210
+R/R
+DOB 2006-04-10
+Sophomore-eligible redshirt
+IMG Academy
+Undrafted out of high school
+Freshman year at Tennessee
+Transferred to Indiana
+Appalachian League summer 2026
+OSM qualitative assessment: performed tremendously
+
+Treat these as OSM-provided facts/assessment unless independently present in the current database.
+
+FIRST:
+
+Search the CURRENT REPL DATABASE for Nathan Eisfelder.
+
+Report every real non-fixture record found and its provenance.
+
+Do not add the OSM-supplied information to the database.
+
+SECOND:
+
+Audit actual historical coverage in the current non-fixture player data for these fields:
+
+- position
+- OF sub-position
+- bats
+- throws
+- height
+- weight
+- DOB
+- draft age if calculable from stored DOB
+- player class
+- redshirt status
+- sophomore eligibility
+- school
+- previous school / transfer history
+- high-school draft history
+- prior undrafted status
+- MLB/public ranking
+- summer-league participation
+- summer-league statistics
+- college statistics
+- conference
+- signing bonus
+- draft round
+- overall pick
+- drafted/undrafted/NDFA outcome
+
+For each field report:
+
+FIELD
+DATABASE COLUMN/TABLE
+POPULATED NON-FIXTURE RECORDS
+TOTAL APPLICABLE RECORDS
+COVERAGE %
+YEARS AVAILABLE
+SOURCE(S)
+
+If the database does not contain a field, say NO FIELD.
+
+If a field exists but has zero populated records, say 0.
+
+Do not infer coverage from schema alone.
+
+THIRD:
+
+Based strictly on those results, divide Nathan's characteristics into:
+
+A. RELIABLE FOR HISTORICAL COMPARISON NOW
+B. AVAILABLE BUT INCOMPLETE
+C. NOT CURRENTLY AVAILABLE
+
+Do not assign weights or build a similarity methodology.
+
+FOURTH:
+
+Identify which missing datasets would most materially improve a Nathan-style comparison.
+
+We are separately considering adding Cape Cod League and Appalachian League historical data, so specifically tell me whether the current database already contains structured summer-league performance data or whether that would genuinely add a new comparison dimension.
+
+STOP AFTER THE AUDIT.
+
+Do not implement anything.

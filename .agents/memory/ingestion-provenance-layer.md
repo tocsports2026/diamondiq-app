@@ -64,6 +64,10 @@ D → diamondiq_inference Layer 4 (only if osm_review_status='approved', explici
 E → DATA GAP → auto-create intelligence_request
 NEVER silently substitute AI/model knowledge.
 
+## Real-data Audit Convention
+- In DiamondIQ work, “production data” means the current Repl database’s real ingested records filtered with `is_fixture = FALSE`, not a separately published deployment database.
+- Read-only audits must report the database actually queried and never silently substitute fixtures, a different environment, or model knowledge.
+
 ## Ingestion Pipeline Status
 - Stage 1–4 (upload, parse, map, preview): BUILT
 - Stage 5 (commit — write production rows): BUILT AND IN USE
@@ -143,10 +147,6 @@ Sections produced for club reports:
   G: Data Gaps & Limitations
 
 draft_players query: WHERE mlb_org = $club AND is_fixture=FALSE, ORDER BY draft_year DESC, draft_round ASC.
-
-## Dev Credentials
-Admin: admin@ocmsports.com / DiamondIQ2024!
-Athlete profile id=1, user_id=2
 
 ## Next Priority
 - Draft and NIL report types still use buildInitialContent() placeholder — evidence engine not yet extended
