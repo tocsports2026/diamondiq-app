@@ -645,5 +645,42 @@ export async function runMigrations() {
   // ── 13. slot_values: source worksheet tracking ────────────────────────────────
   await query(`ALTER TABLE slot_values ADD COLUMN IF NOT EXISTS source_worksheet TEXT`);
 
+  // ── 14. Job #9 historical draft database: factual source preservation ─────────
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS source_unique_id TEXT`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS source_drafting_organization TEXT`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS draft_date DATE`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS bonus_over_under NUMERIC`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS college_commitment TEXT`);
+  await query(`ALTER TABLE draft_players ADD COLUMN IF NOT EXISTS source_public_notes JSONB`);
+
+  // Slot metadata remains factual even when the source does not provide a dollar value.
+  await query(`ALTER TABLE slot_values ALTER COLUMN slot_value_usd DROP NOT NULL`);
+  await query(`ALTER TABLE slot_values ADD COLUMN IF NOT EXISTS slot_round INTEGER`);
+  await query(`ALTER TABLE slot_values ADD COLUMN IF NOT EXISTS slot_round_label TEXT`);
+  await query(`ALTER TABLE slot_values ADD COLUMN IF NOT EXISTS drafting_organization TEXT`);
+
+  await query(`ALTER TABLE historical_rankings ADD COLUMN IF NOT EXISTS source_worksheet TEXT`);
+  await query(`ALTER TABLE historical_rankings ADD COLUMN IF NOT EXISTS source_unique_id TEXT`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS ingestion_review_holds (
+      id                     SERIAL PRIMARY KEY,
+      dataset_id             INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+      source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+      ingestion_job_id       INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+      source_worksheet       TEXT NOT NULL,
+      source_excel_row       INTEGER,
+      source_unique_id       TEXT,
+      player_name            TEXT,
+      draft_year             INTEGER,
+      hold_reason            TEXT NOT NULL,
+      source_row_data        JSONB NOT NULL,
+      is_fixture             BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_ingestion_review_holds_job
+    ON ingestion_review_holds (ingestion_job_id)`);
+
   console.log("Database migrations complete.");
 }

@@ -1509,7 +1509,9 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
     // Safe numeric parse.
     function toNumN(v: unknown): number | null {
       if (v === null || v === undefined || v === "") return null;
-      const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[$,%]/g, ""));
+      const n = typeof v === "number"
+        ? v
+        : parseFloat(String(v).replace(/[$,%\s,]/g, ""));
       return isNaN(n) ? null : n;
     }
 
@@ -1519,6 +1521,20 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
       if (typeof v === "string") {
         const s = v.trim();
         if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+        if (m) {
+          const month = Number(m[1]);
+          const day = Number(m[2]);
+          const year = Number(m[3]);
+          const date = new Date(Date.UTC(year, month - 1, day));
+          if (
+            date.getUTCFullYear() === year &&
+            date.getUTCMonth() === month - 1 &&
+            date.getUTCDate() === day
+          ) {
+            return date.toISOString().slice(0, 10);
+          }
+        }
         return null;
       }
       const n = Number(v);
@@ -1552,6 +1568,645 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
       return { bats: parts[0]?.trim() || null, throws: parts[1]?.trim() || null };
     }
     // ── END SHARED HELPERS ─────────────────────────────────────────────────────
+
+    // ── JOB #9 COMMIT PATH: Comprehensive Historical Draft Database ────────────
+    // The workbook contains factual source records only. It never creates an
+    // outcome for a 2026 prospect, an inference, or an automatic name-only link.
+    if (wb.SheetNames.includes("2012-2025 Drafted")) {
+      await client.query("BEGIN");
+
+      const historicalSheet = "2012-2025 Drafted";
+      const prospectSheet = "2026 Prospects";
+      const slotSheet = "2026 Draft Picks with Slots";
+      const historicalPreamble = "Comprehensive Draft Database 2012-2025 Updated WIP | 2012-2025 Drafted";
+      const prospectPreamble = "Comprehensive Draft Database 2012-2025 Updated WIP | 2026 Prospects";
+      const slotPreamble = "Comprehensive Draft Database 2012-2025 Updated WIP | 2026 Draft Picks with Slots";
+
+      function sheetRowsR1(name: string): (string|number|boolean|null)[][] {
+        const ws = wb.Sheets[name];
+        if (!ws) return [];
+        return XLSX.utils.sheet_to_json<(string|number|boolean|null)[]>(
+          ws,
+          { header: 1, defval: null }
+        );
+      }
+
+      function textValue(v: unknown): string | null {
+        const value = String(v ?? "").trim();
+        return value || null;
+      }
+
+      function integerValue(v: unknown): number | null {
+        const value = toNumN(v);
+        return value !== null && Number.isInteger(value) ? Math.trunc(value) : null;
+      }
+
+      function normalizedName(v: unknown): string {
+        return String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      }
+
+      function sourceRecord(
+        headers: Array<string | null>,
+        row: (string|number|boolean|null)[]
+      ): Record<string, string | number | boolean | null> {
+        const record: Record<string, string | number | boolean | null> = {};
+        headers.forEach((header, index) => {
+          if (header) record[header] = row[index] ?? null;
+        });
+        return record;
+      }
+
+      function sourceNotes(mlbNotes: unknown, baNotes: unknown): string | null {
+        const notes: Record<string, string> = {};
+        const mlb = textValue(mlbNotes);
+        const ba = textValue(baNotes);
+        if (mlb) notes.MLB = mlb;
+        if (ba) notes["Baseball America"] = ba;
+        return Object.keys(notes).length ? JSON.stringify(notes) : null;
+      }
+
+      type Job9Player = {
+        sourceUniqueId: string | null;
+        playerName: string | null;
+        draftYear: number | null;
+        draftRound: number | null;
+        draftRoundLabel: string | null;
+        draftPickOverall: number | null;
+        mlbOrg: string | null;
+        sourceDraftingOrganization: string | null;
+        position: string | null;
+        school: string | null;
+        state: string | null;
+        playerClass: string | null;
+        heightIn: number | null;
+        weightLbs: number | null;
+        dob: string | null;
+        bats: string | null;
+        throwsValue: string | null;
+        draftDate: string | null;
+        ageAtDraft: number | null;
+        bonusReported: number | null;
+        bonusSlotValue: number | null;
+        bonusOverUnder: number | null;
+        collegeCommitment: string | null;
+        publicNotes: string | null;
+        outcomeGroup: string | null;
+        rankings: Array<{ provider: string; value: number | null; sourceColumn: string }>;
+      };
+
+      function historicalPlayer(row: (string|number|boolean|null)[]): Job9Player {
+        const sourceRound = parseRound(row[2]);
+        const rawPick = textValue(row[3]);
+        const draftPickOverall = integerValue(row[3]);
+        const draftRoundLabel = sourceRound.roundLabel ??
+          (draftPickOverall === null ? rawPick : null);
+        const rawTeam = textValue(row[4]);
+        const isUndrafted = /^undrafted$/i.test(draftRoundLabel ?? "") ||
+          /^undrafted$/i.test(rawPick ?? "");
+
+        return {
+          sourceUniqueId: textValue(row[0]),
+          playerName: textValue(row[5]),
+          draftYear: integerValue(row[1]),
+          draftRound: sourceRound.round,
+          draftRoundLabel,
+          draftPickOverall,
+          mlbOrg: rawTeam ? (abbrevToOrg(rawTeam) ?? rawTeam) : null,
+          sourceDraftingOrganization: rawTeam,
+          position: textValue(row[6]),
+          school: textValue(row[7]),
+          state: textValue(row[8]),
+          playerClass: textValue(row[9]),
+          heightIn: parseHeightIn(row[10]),
+          weightLbs: integerValue(row[11]),
+          dob: toDateISO(row[12]),
+          bats: textValue(row[13]),
+          throwsValue: textValue(row[14]),
+          draftDate: toDateISO(row[15]),
+          ageAtDraft: toNumN(row[16]),
+          bonusReported: toNumN(row[17]),
+          bonusSlotValue: toNumN(row[18]),
+          bonusOverUnder: toNumN(row[19]),
+          collegeCommitment: textValue(row[24]),
+          publicNotes: sourceNotes(row[25], row[26]),
+          outcomeGroup: isUndrafted ? "Undrafted" : "Drafted",
+          rankings: [
+            { provider: "MLB", value: integerValue(row[20]), sourceColumn: "MLB Rank" },
+            { provider: "Perfect Game", value: integerValue(row[21]), sourceColumn: "PG Rank" },
+            { provider: "Baseball America", value: integerValue(row[22]), sourceColumn: "BA Rank" },
+            { provider: "FanGraphs", value: integerValue(row[23]), sourceColumn: "FanGraphs" },
+          ],
+        };
+      }
+
+      function prospectPlayer(row: (string|number|boolean|null)[]): Job9Player {
+        return {
+          sourceUniqueId: textValue(row[0]),
+          playerName: textValue(row[1]),
+          draftYear: 2026,
+          draftRound: null,
+          draftRoundLabel: null,
+          draftPickOverall: null,
+          mlbOrg: null,
+          sourceDraftingOrganization: null,
+          position: textValue(row[2]),
+          school: textValue(row[3]),
+          state: textValue(row[4]),
+          playerClass: textValue(row[5]),
+          heightIn: parseHeightIn(row[6]),
+          weightLbs: integerValue(row[7]),
+          dob: toDateISO(row[8]),
+          bats: textValue(row[9]),
+          throwsValue: textValue(row[10]),
+          draftDate: toDateISO(row[11]),
+          ageAtDraft: toNumN(row[12]),
+          bonusReported: null,
+          bonusSlotValue: null,
+          bonusOverUnder: null,
+          collegeCommitment: textValue(row[19]),
+          publicNotes: sourceNotes(row[16], row[18]),
+          outcomeGroup: null,
+          rankings: [
+            { provider: "MLB", value: integerValue(row[13]), sourceColumn: "MLB Rank" },
+            { provider: "Perfect Game", value: integerValue(row[14]), sourceColumn: "PG Rank" },
+            { provider: "FanGraphs", value: integerValue(row[15]), sourceColumn: "FG Rank" },
+            { provider: "Baseball America", value: integerValue(row[17]), sourceColumn: "BA Rank" },
+          ],
+        };
+      }
+
+      async function insertDraftPlayer(
+        player: Job9Player,
+        sourceWorksheet: string,
+        sourceRow: number,
+        sourcePreamble: string
+      ): Promise<number> {
+        if (!player.playerName || !player.draftYear) {
+          throw new Error("Cannot create a canonical draft player without a source player name and draft year.");
+        }
+
+        const inserted = await client.query<{ id: number }>(
+          `INSERT INTO draft_players
+             (dataset_id, source_file_version_id, ingestion_job_id,
+              source_row, source_worksheet, source_preamble,
+              source_unique_id, player_name, draft_year, draft_round, draft_round_label,
+              draft_pick_overall, mlb_org, source_drafting_organization,
+              position, school, state, player_class, height_in, weight_lbs, dob,
+              bats, throws, draft_date, age_at_draft,
+              bonus_reported, bonus_slot_value, bonus_over_under,
+              college_commitment, source_public_notes, outcome_group,
+              evidence_class, verification_status, is_fixture)
+           VALUES
+             ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+              $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,
+              'verified_public','unverified',FALSE)
+           RETURNING id`,
+          [
+            datasetId, sfvId, jobId,
+            sourceRow, sourceWorksheet, sourcePreamble,
+            player.sourceUniqueId, player.playerName, player.draftYear, player.draftRound,
+            player.draftRoundLabel, player.draftPickOverall, player.mlbOrg,
+            player.sourceDraftingOrganization, player.position, player.school, player.state,
+            player.playerClass, player.heightIn, player.weightLbs, player.dob, player.bats,
+            player.throwsValue, player.draftDate, player.ageAtDraft, player.bonusReported,
+            player.bonusSlotValue, player.bonusOverUnder, player.collegeCommitment,
+            player.publicNotes, player.outcomeGroup,
+          ]
+        );
+        return inserted.rows[0].id;
+      }
+
+      let rankingsInserted = 0;
+      async function insertRankings(
+        player: Job9Player,
+        sourceWorksheet: string,
+        sourceRow: number,
+        sourcePreamble: string
+      ): Promise<void> {
+        if (!player.playerName || !player.draftYear) return;
+        for (const ranking of player.rankings) {
+          if (ranking.value === null) continue;
+          await client.query(
+            `INSERT INTO historical_rankings
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_excel_column, source_preamble,
+                source_unique_id, player_name, ranking_source, ranking_year, rank_position,
+                school, position, source_provider,
+                evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+                     'verified_public','unverified',FALSE)`,
+            [
+              datasetId, sfvId, jobId,
+              sourceRow, sourceWorksheet, ranking.sourceColumn, sourcePreamble,
+              player.sourceUniqueId, player.playerName, ranking.provider, player.draftYear,
+              ranking.value, player.school, player.position, ranking.provider,
+            ]
+          );
+          rankingsInserted++;
+        }
+      }
+
+      let sourceAssertions = 0;
+      async function addSourceAssertion(
+        canonicalRecordTable: "draft_players" | "slot_values",
+        canonicalRecordId: number,
+        sourceWorksheet: string,
+        sourceRow: number,
+        sourceColumn: string,
+        assertedValue: string | null,
+        conflictsWithCanonical = false,
+        conflictDelta: string | null = null
+      ): Promise<void> {
+        await client.query(
+          `INSERT INTO record_source_assertions
+             (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+              worksheet, excel_row, excel_column, source_preamble, asserted_value,
+              conflicts_with_canonical, conflict_delta)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [
+            canonicalRecordTable, canonicalRecordId, sfvId, jobId,
+            sourceWorksheet, sourceRow, sourceColumn,
+            sourceWorksheet === slotSheet ? slotPreamble :
+              sourceWorksheet === prospectSheet ? prospectPreamble : historicalPreamble,
+            assertedValue, conflictsWithCanonical, conflictDelta,
+          ]
+        );
+        sourceAssertions++;
+      }
+
+      let reviewHolds = 0;
+      async function holdForReview(
+        sourceWorksheet: string,
+        sourceRow: number,
+        player: Job9Player,
+        reason: string,
+        rawSource: unknown
+      ): Promise<void> {
+        await client.query(
+          `INSERT INTO ingestion_review_holds
+             (dataset_id, source_file_version_id, ingestion_job_id,
+              source_worksheet, source_excel_row, source_unique_id, player_name,
+              draft_year, hold_reason, source_row_data, is_fixture)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE)`,
+          [
+            datasetId, sfvId, jobId,
+            sourceWorksheet, sourceRow, player.sourceUniqueId, player.playerName,
+            player.draftYear, reason, JSON.stringify(rawSource),
+          ]
+        );
+        reviewHolds++;
+      }
+
+      type ExistingEvent = {
+        id: number;
+        player_name: string;
+        draft_year: number;
+        draft_pick_overall: number | null;
+        draft_round_label: string | null;
+      };
+      const existingEvents = await client.query<ExistingEvent>(
+        `SELECT id, player_name, draft_year, draft_pick_overall, draft_round_label
+         FROM draft_players
+         WHERE is_fixture=FALSE AND draft_year BETWEEN 2012 AND 2025`
+      );
+      const eventKey = (year: number, pick: number | null, pickLabel: string | null, name: string) =>
+        `${year}|${pick === null ? `label:${String(pickLabel ?? "").toLowerCase()}` : `pick:${pick}`}|${normalizedName(name)}`;
+      const yearPickKey = (year: number, pick: number) => `${year}|pick:${pick}`;
+      const existingByEvent = new Map<string, ExistingEvent>();
+      const existingByYearPick = new Map<string, ExistingEvent[]>();
+      for (const record of existingEvents.rows) {
+        const key = eventKey(
+          record.draft_year,
+          record.draft_pick_overall,
+          record.draft_pick_overall === null ? record.draft_round_label : null,
+          record.player_name
+        );
+        existingByEvent.set(key, record);
+        if (record.draft_pick_overall !== null) {
+          const pickKey = yearPickKey(record.draft_year, record.draft_pick_overall);
+          const matches = existingByYearPick.get(pickKey) ?? [];
+          matches.push(record);
+          existingByYearPick.set(pickKey, matches);
+        }
+      }
+
+      const historicalRows = sheetRowsR1(historicalSheet);
+      const historicalHeaders = historicalRows[0].map((header) => textValue(header));
+      const historicalGroups = new Map<string, Array<{ row: (string|number|boolean|null)[]; rowNumber: number; player: Job9Player }>>();
+      let unnamedHistoricalRowsHeld = 0;
+
+      for (let rowIndex = 1; rowIndex < historicalRows.length; rowIndex++) {
+        const row = historicalRows[rowIndex];
+        const player = historicalPlayer(row);
+        const rowNumber = rowIndex + 1;
+        if (!player.playerName || !player.draftYear) {
+          await holdForReview(
+            historicalSheet,
+            rowNumber,
+            player,
+            !player.playerName ? "historical_row_missing_player_name" : "historical_row_missing_draft_year",
+            sourceRecord(historicalHeaders, row)
+          );
+          unnamedHistoricalRowsHeld++;
+          continue;
+        }
+        const key = eventKey(
+          player.draftYear,
+          player.draftPickOverall,
+          player.draftPickOverall === null ? player.draftRoundLabel : null,
+          player.playerName
+        );
+        const group = historicalGroups.get(key) ?? [];
+        group.push({ row, rowNumber, player });
+        historicalGroups.set(key, group);
+      }
+
+      let historicalCanonicalInserted = 0;
+      let historicalUndraftedInserted = 0;
+      let historicalEventsCorroborated = 0;
+      let duplicateSourceEventGroupsCollapsed = 0;
+      let duplicateSourceRowsCollapsed = 0;
+      let identityReviewGroupsHeld = 0;
+      let identityReviewRowsHeld = 0;
+
+      for (const [key, sourceRows] of historicalGroups) {
+        const primary = sourceRows[0];
+        const player = primary.player;
+        const existing = existingByEvent.get(key);
+        let canonicalId: number | null = null;
+
+        if (existing) {
+          canonicalId = existing.id;
+          historicalEventsCorroborated++;
+          await addSourceAssertion(
+            "draft_players",
+            canonicalId,
+            historicalSheet,
+            primary.rowNumber,
+            "Raw source row",
+            JSON.stringify(sourceRecord(historicalHeaders, primary.row))
+          );
+        } else if (player.draftPickOverall !== null &&
+          (existingByYearPick.get(yearPickKey(player.draftYear!, player.draftPickOverall))?.length ?? 0) > 0) {
+          await holdForReview(
+            historicalSheet,
+            primary.rowNumber,
+            player,
+            "same_year_pick_name_variant_requires_identity_review",
+            {
+              source_rows: sourceRows.map(({ row, rowNumber }) => ({
+                excel_row: rowNumber,
+                values: sourceRecord(historicalHeaders, row),
+              })),
+            }
+          );
+          identityReviewGroupsHeld++;
+          identityReviewRowsHeld += sourceRows.length;
+          continue;
+        } else {
+          canonicalId = await insertDraftPlayer(
+            player,
+            historicalSheet,
+            primary.rowNumber,
+            historicalPreamble
+          );
+          historicalCanonicalInserted++;
+          if (player.outcomeGroup === "Undrafted") historicalUndraftedInserted++;
+          existingByEvent.set(key, {
+            id: canonicalId,
+            player_name: player.playerName!,
+            draft_year: player.draftYear!,
+            draft_pick_overall: player.draftPickOverall,
+            draft_round_label: player.draftRoundLabel,
+          });
+        }
+
+        await insertRankings(player, historicalSheet, primary.rowNumber, historicalPreamble);
+
+        if (sourceRows.length > 1) {
+          duplicateSourceEventGroupsCollapsed++;
+          duplicateSourceRowsCollapsed += sourceRows.length - 1;
+          for (const duplicate of sourceRows.slice(1)) {
+            await addSourceAssertion(
+              "draft_players",
+              canonicalId,
+              historicalSheet,
+              duplicate.rowNumber,
+              "Raw duplicate source row",
+              JSON.stringify(sourceRecord(historicalHeaders, duplicate.row))
+            );
+          }
+        }
+      }
+
+      // 2026 prospects are retained as independent source profiles. A name-only
+      // match is deliberately not used as an identity link or an outcome.
+      const existing2026 = await client.query<{ id: number; player_name: string; source_unique_id: string | null }>(
+        `SELECT id, player_name, source_unique_id
+         FROM draft_players
+         WHERE draft_year=2026 AND is_fixture=FALSE`
+      );
+      const existing2026ByName = new Map<string, number[]>();
+      const existing2026BySourceId = new Map<string, number>();
+      for (const record of existing2026.rows) {
+        const nameKey = normalizedName(record.player_name);
+        if (nameKey) {
+          const matches = existing2026ByName.get(nameKey) ?? [];
+          matches.push(record.id);
+          existing2026ByName.set(nameKey, matches);
+        }
+        if (record.source_unique_id) existing2026BySourceId.set(record.source_unique_id, record.id);
+      }
+
+      const prospectRows = sheetRowsR1(prospectSheet);
+      const prospectHeaders = prospectRows[0]?.map((header) => textValue(header)) ?? [];
+      let prospectProfilesAdded = 0;
+      let prospectProfilesCorroborated = 0;
+      let prospectIdentityRelationshipsHeld = 0;
+      let prospectNoNameCandidateCount = 0;
+
+      for (let rowIndex = 1; rowIndex < prospectRows.length; rowIndex++) {
+        const row = prospectRows[rowIndex];
+        const player = prospectPlayer(row);
+        const rowNumber = rowIndex + 1;
+        if (!player.playerName) {
+          await holdForReview(
+            prospectSheet,
+            rowNumber,
+            player,
+            "prospect_row_missing_player_name",
+            sourceRecord(prospectHeaders, row)
+          );
+          prospectIdentityRelationshipsHeld++;
+          continue;
+        }
+
+        const matchingSourceId = player.sourceUniqueId
+          ? existing2026BySourceId.get(player.sourceUniqueId)
+          : undefined;
+        if (matchingSourceId) {
+          await addSourceAssertion(
+            "draft_players",
+            matchingSourceId,
+            prospectSheet,
+            rowNumber,
+            "Raw source profile row",
+            JSON.stringify(sourceRecord(prospectHeaders, row))
+          );
+          await insertRankings(player, prospectSheet, rowNumber, prospectPreamble);
+          prospectProfilesCorroborated++;
+          continue;
+        }
+
+        await insertDraftPlayer(player, prospectSheet, rowNumber, prospectPreamble);
+        await insertRankings(player, prospectSheet, rowNumber, prospectPreamble);
+        prospectProfilesAdded++;
+
+        const nameCandidates = existing2026ByName.get(normalizedName(player.playerName)) ?? [];
+        if (nameCandidates.length > 1) {
+          await holdForReview(
+            prospectSheet,
+            rowNumber,
+            player,
+            "ambiguous_normalized_name_relationship_not_linked",
+            sourceRecord(prospectHeaders, row)
+          );
+          prospectIdentityRelationshipsHeld++;
+        } else if (nameCandidates.length === 0) {
+          prospectNoNameCandidateCount++;
+        }
+      }
+
+      // Slot values corroborate the existing 2026 canonical records. Blank source
+      // values remain NULL assertions; conflicting values remain explicitly held.
+      const existingSlots = await client.query<{ id: number; pick_overall: number; slot_value_usd: string | null }>(
+        `SELECT id, pick_overall, slot_value_usd
+         FROM slot_values
+         WHERE draft_year=2026 AND is_fixture=FALSE`
+      );
+      const slotByPick = new Map<number, { id: number; value: number | null }>();
+      for (const slot of existingSlots.rows) {
+        slotByPick.set(slot.pick_overall, {
+          id: slot.id,
+          value: slot.slot_value_usd === null ? null : Number(slot.slot_value_usd),
+        });
+      }
+
+      const slotRows = sheetRowsR1(slotSheet);
+      let slotValuesInserted = 0;
+      let slotValuesCorroborated = 0;
+      let blankSlotValuesPreserved = 0;
+      let slotValueConflictsHeld = 0;
+
+      for (let rowIndex = 1; rowIndex < slotRows.length; rowIndex++) {
+        const row = slotRows[rowIndex];
+        const rowNumber = rowIndex + 1;
+        const sourceRound = parseRound(row[0]);
+        const pick = integerValue(row[1]);
+        const rawClub = textValue(row[2]);
+        const slotValue = toNumN(row[3]);
+        if (pick === null) continue;
+
+        const existing = slotByPick.get(pick);
+        if (existing) {
+          await client.query(
+            `UPDATE slot_values
+             SET slot_round = COALESCE(slot_round, $1),
+                 slot_round_label = COALESCE(slot_round_label, $2),
+                 drafting_organization = COALESCE(drafting_organization, $3)
+             WHERE id=$4`,
+            [sourceRound.round, sourceRound.roundLabel, rawClub, existing.id]
+          );
+
+          const conflict = slotValue !== null && existing.value !== null && slotValue !== existing.value;
+          await addSourceAssertion(
+            "slot_values",
+            existing.id,
+            slotSheet,
+            rowNumber,
+            "Slot Value",
+            slotValue === null ? null : String(slotValue),
+            conflict,
+            conflict ? JSON.stringify({ source: slotValue, canonical: existing.value }) : null
+          );
+          await addSourceAssertion(
+            "slot_values", existing.id, slotSheet, rowNumber,
+            "Round", sourceRound.roundLabel ?? (sourceRound.round === null ? null : String(sourceRound.round))
+          );
+          await addSourceAssertion(
+            "slot_values", existing.id, slotSheet, rowNumber, "Club", rawClub
+          );
+
+          if (slotValue === null) blankSlotValuesPreserved++;
+          else if (conflict) slotValueConflictsHeld++;
+          else slotValuesCorroborated++;
+        } else {
+          await client.query(
+            `INSERT INTO slot_values
+               (dataset_id, source_file_version_id, ingestion_job_id,
+                source_row, source_worksheet, source_preamble,
+                draft_year, pick_overall, slot_value_usd,
+                slot_round, slot_round_label, drafting_organization,
+                pool_eligible, evidence_class, verification_status, is_fixture)
+             VALUES ($1,$2,$3,$4,$5,$6,2026,$7,$8,$9,$10,$11,
+                     TRUE,'verified_public','unverified',FALSE)`,
+            [
+              datasetId, sfvId, jobId,
+              rowNumber, slotSheet, slotPreamble,
+              pick, slotValue, sourceRound.round, sourceRound.roundLabel, rawClub,
+            ]
+          );
+          slotValuesInserted++;
+          if (slotValue === null) blankSlotValuesPreserved++;
+        }
+      }
+
+      const rowsImported = historicalCanonicalInserted + prospectProfilesAdded +
+        rankingsInserted + slotValuesInserted + sourceAssertions + reviewHolds;
+      await client.query(
+        `UPDATE ingestion_jobs
+         SET status='complete', completed_at=NOW(), rows_imported=$1
+         WHERE id=$2`,
+        [rowsImported, jobId]
+      );
+      await client.query(
+        `UPDATE data_library SET processing_status='ready', last_import_at=NOW() WHERE id=$1`,
+        [datasetId]
+      );
+      await client.query("COMMIT");
+
+      return res.json({
+        ok: true,
+        data: {
+          jobId,
+          status: "complete",
+          mode: "historical_draft_database",
+          historicalCanonicalRecordsCreated: historicalCanonicalInserted,
+          historicalUndraftedEventsCreated: historicalUndraftedInserted,
+          historicalEventsCorroborated,
+          duplicateSourceEventGroupsCollapsed,
+          duplicateSourceRowsCollapsed,
+          identityReviewGroupsHeld,
+          identityReviewRowsHeld,
+          unnamedHistoricalRowsHeld,
+          prospectProfilesAdded,
+          prospectProfilesCorroborated,
+          prospectIdentityRelationshipsHeld,
+          prospectNoNameCandidateCount,
+          historicalRankingsCreated: rankingsInserted,
+          slotValuesInserted,
+          slotValuesCorroborated,
+          blankSlotValuesPreserved,
+          blankSlotValuesConvertedToZero: 0,
+          slotValueConflictsHeld,
+          sourceAssertions,
+          reviewHolds,
+          fixtureRecordsUsed: 0,
+          diamondIQInferencesCreated: 0,
+        },
+      });
+    }
+    // ── END JOB #9 COMMIT PATH ─────────────────────────────────────────────────
 
     // ── JOB #8 COMMIT PATH: 2026 Draft Outcomes & Undrafted Population ─────────
     // Detected by presence of "Drafted 2026" sheet.

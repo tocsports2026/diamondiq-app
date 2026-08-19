@@ -387,7 +387,15 @@ CREATE TABLE IF NOT EXISTS draft_players (
   approved_record_id INTEGER REFERENCES draft_players(id) ON DELETE SET NULL,
   osm_notes TEXT,
   last_updated TIMESTAMP NOT NULL DEFAULT NOW(),
-  is_fixture BOOLEAN NOT NULL DEFAULT FALSE
+  is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Source-specific identifier. It is not MLBAM or a universal DiamondIQ ID.
+  source_unique_id TEXT,
+  source_drafting_organization TEXT,
+  draft_date DATE,
+  bonus_over_under NUMERIC,
+  college_commitment TEXT,
+  -- Provider-labelled public narrative, e.g. {"MLB": "...", "Baseball America": "..."}.
+  source_public_notes JSONB
 );
 
 -- Layer 1: official MLB slot values by pick and year.
@@ -401,7 +409,11 @@ CREATE TABLE IF NOT EXISTS slot_values (
   source_preamble TEXT,
   draft_year INTEGER NOT NULL,
   pick_overall INTEGER NOT NULL,
-  slot_value_usd NUMERIC NOT NULL,
+  -- NULL means the source did not report a value; it never represents $0.
+  slot_value_usd NUMERIC,
+  slot_round INTEGER,
+  slot_round_label TEXT,
+  drafting_organization TEXT,
   pool_eligible BOOLEAN DEFAULT TRUE,
   source_provider TEXT,
   import_date TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -437,7 +449,9 @@ CREATE TABLE IF NOT EXISTS historical_rankings (
     CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
   conflict_flag BOOLEAN NOT NULL DEFAULT FALSE,
   approved_record_id INTEGER,
-  is_fixture BOOLEAN NOT NULL DEFAULT FALSE
+  is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
+  source_worksheet TEXT,
+  source_unique_id TEXT
 );
 
 -- Layer 1: club-level payroll and CBT (Luxury Tax) history.
@@ -789,6 +803,26 @@ CREATE INDEX IF NOT EXISTS idx_rsa_canonical
   ON record_source_assertions (canonical_record_table, canonical_record_id);
 CREATE INDEX IF NOT EXISTS idx_rsa_job
   ON record_source_assertions (ingestion_job_id);
+
+-- Source rows that cannot safely become canonical facts without a human identity
+-- decision. They retain source-file and row-level provenance for review.
+CREATE TABLE IF NOT EXISTS ingestion_review_holds (
+  id                     SERIAL PRIMARY KEY,
+  dataset_id             INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  ingestion_job_id       INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+  source_worksheet       TEXT NOT NULL,
+  source_excel_row       INTEGER,
+  source_unique_id       TEXT,
+  player_name            TEXT,
+  draft_year             INTEGER,
+  hold_reason            TEXT NOT NULL,
+  source_row_data        JSONB NOT NULL,
+  is_fixture             BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ingestion_review_holds_job
+  ON ingestion_review_holds (ingestion_job_id);
 
 -- ============================================================
 -- LEAGUE FACTS — verified-public league-level factual records
