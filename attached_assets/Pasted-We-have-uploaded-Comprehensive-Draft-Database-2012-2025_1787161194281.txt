@@ -1,0 +1,167 @@
+We have uploaded:
+
+Comprehensive Draft Database 2012-2025 Updated WIP(1).xlsx
+
+This is an important historical player-level source for DiamondIQ.
+
+DO NOT COMMIT IT YET.
+
+Parse and map the workbook using the existing ingestion architecture, then give me a PRE-COMMIT REVIEW.
+
+The workbook contains three important datasets:
+
+1. 2026 Prospects
+Approximately 513 player records.
+
+Important source fields include:
+- Unique ID
+- Player
+- Position
+- School
+- State
+- Class
+- Height
+- Weight
+- DOB
+- Bats
+- Throws
+- Draft Date
+- Age
+- MLB Rank
+- PG Rank
+
+2. 2012-2025 Drafted
+Approximately 32,121 historical drafted-player records spanning 2012 through 2025.
+
+Important source fields include:
+- Unique ID
+- Draft Year
+- Round
+- Pick
+- Team
+- Player
+- Position
+- School
+- State
+- Class
+- Height
+- Weight
+- DOB
+- Bats
+- Throws
+
+Inspect ALL remaining columns in this sheet as well. Do not limit mapping to the fields listed above.
+
+3. 2026 Draft Picks with Slots
+Approximately 613 draft-pick/slot records.
+
+Important fields:
+- Round
+- Pick
+- Club
+- Slot Value
+
+IMPORTANT:
+
+This workbook overlaps some data already ingested from Jobs #5 and #8.
+
+Do NOT create duplicate canonical records.
+
+Use the existing deduplication/source-assertion architecture so overlapping records can corroborate existing facts while genuinely new historical player records and attributes are added.
+
+The 2012-2025 historical player population is especially important.
+
+Do not reduce this sheet to only records that overlap existing data.
+
+We want the full historical drafted-player population preserved.
+
+UNIQUE ID:
+
+Treat the source Unique ID as potentially important persistent source identity.
+
+Inspect whether the existing draft_players schema can preserve it safely.
+
+Do NOT assume it is an MLBAM ID unless the source explicitly establishes that.
+
+If a new source-specific identifier field is required, flag that in the review rather than incorrectly mapping it to mlbam_player_id.
+
+PLAYER PROFILE FIELDS:
+
+We specifically want to preserve factual historical fields where supplied:
+
+- height
+- weight
+- DOB
+- bats
+- throws
+- state
+- player class
+- school
+- position
+- draft year
+- draft round
+- overall pick
+- drafting organization
+- MLB rank
+- PG rank
+- source Unique ID
+
+Do not calculate or infer missing values during ingestion.
+
+If Age is already supplied in the source, preserve its provenance, but do not treat a calculated age as more authoritative than DOB.
+
+2026 OVERLAP:
+
+The 2026 Prospects and 2026 Draft Picks with Slots sheets may overlap records already committed from Job #8.
+
+Identify:
+- exact existing matches
+- corroborating source assertions
+- conflicting values
+- genuinely new fields
+- genuinely new players
+
+Do not overwrite existing canonical values silently when sources disagree.
+
+PRE-COMMIT REPORT:
+
+Before committing anything, report:
+
+1. Job number
+2. Sheets detected
+3. Exact data-row count per sheet
+4. Year coverage
+5. Column-to-canonical-field mapping for EVERY populated column
+6. Fields requiring new schema support
+7. Number of historical drafted-player records expected to be new
+8. Number expected to deduplicate/corroborate existing records
+9. Number of 2026 prospect records expected to be new vs existing
+10. Number of slot records expected to deduplicate vs add
+11. Duplicate identities detected
+12. Conflicting source assertions detected
+13. How source Unique ID will be preserved
+14. Any columns that would be skipped and WHY
+15. Full provenance fields that will be retained
+16. Fixture records involved
+
+Also specifically tell me whether this workbook materially improves historical coverage for:
+
+- height
+- weight
+- DOB
+- bats
+- throws
+- class
+- school
+- position
+- draft round
+- overall pick
+- drafting organization
+- MLB/public ranking
+
+STOP AFTER THE PRE-COMMIT REVIEW.
+
+Do not commit until I approve the mapping.
+Do not build comparable methodology.
+Do not create new DiamondIQ inferences.
+Do not search the web.
