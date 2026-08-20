@@ -1546,7 +1546,11 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
     // Integers stay as draft_round; non-integer strings go to draft_round_label.
     function parseRound(v: unknown): { round: number | null; roundLabel: string | null } {
       if (v === null || v === undefined || v === "") return { round: null, roundLabel: null };
-      if (typeof v === "number") return { round: v, roundLabel: null };
+      if (typeof v === "number") {
+        return Number.isInteger(v)
+          ? { round: v, roundLabel: null }
+          : { round: null, roundLabel: String(v) };
+      }
       const s = String(v).trim();
       const n = parseInt(s, 10);
       if (!isNaN(n) && String(n) === s) return { round: n, roundLabel: null };
@@ -1602,7 +1606,11 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
       }
 
       function normalizedName(v: unknown): string {
-        return String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const raw = String(v ?? "").trim();
+        const normalizedOrder = raw.includes(",")
+          ? `${raw.split(",").slice(1).join(" ")} ${raw.split(",")[0]}`
+          : raw;
+        return normalizedOrder.toLowerCase().replace(/[^a-z0-9]/g, "");
       }
 
       function sourceRecord(
@@ -1897,6 +1905,9 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
 
       for (let rowIndex = 1; rowIndex < historicalRows.length; rowIndex++) {
         const row = historicalRows[rowIndex];
+        if (!row.some((value) => value !== null && value !== undefined && String(value).trim() !== "")) {
+          continue;
+        }
         const player = historicalPlayer(row);
         const rowNumber = rowIndex + 1;
         if (!player.playerName || !player.draftYear) {
