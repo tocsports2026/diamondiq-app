@@ -1,0 +1,135 @@
+I approve the transactional commit of Job #10 — Supplemental Evidence Batch 1.
+
+Commit ONLY the previously approved and dry-run-verified Batch 1 plan.
+
+Do not change the schema, mappings, matching methodology, normalization rules, evidence architecture, or identity-link rules during this commit.
+
+EXPECTED COMMIT RESULTS
+
+Historical rankings:
+- 7,250 total
+- PBR: 5,995
+- Perfect Game: 1,255
+
+Player evaluation observations:
+- 5,995
+
+Player-season statistics:
+- 18,733
+  - Perfect Game: 9,758
+  - Cape Cod Baseball League: 6,575
+  - Appalachian League: 2,400
+
+Identity planning:
+- 6,430 deterministic source observations
+- 8,333 candidate source observations
+- 9,965 unlinked source observations
+
+Identity-link rows:
+- 6,430 deterministic_link
+- 16,314 candidate_link
+- 9,965 unlinked
+
+Review holds:
+- 1
+- Cape Cod 2026 Hitters / source row 257 / missing player name
+
+Record source assertions:
+- 8,511
+  - Perfect Game ranking supporting provenance: 8,503
+  - Cape duplicate-row provenance: 8
+
+Exact Cape duplicate source rows collapsed:
+- 8
+
+COMMIT SAFEGUARDS
+
+1. Do not overwrite any existing canonical draft_players facts.
+
+2. Do not create new canonical draft_players identities from unmatched supplemental observations.
+
+3. deterministic_link records are relationships only. They must not mutate canonical player facts.
+
+4. candidate_link records must remain non-canonical candidate relationships.
+
+5. Do not convert candidate links into review holds.
+
+6. Unlinked observations must remain preserved and queryable.
+
+7. Preserve provider-specific metrics exactly as supplied.
+
+8. Preserve raw provider position codes.
+
+9. Missing source values remain NULL.
+
+10. Do not calculate missing statistics.
+
+11. Preserve unusual/extreme source values rather than correcting them.
+
+12. Preserve the complete approved provenance chain.
+
+13. Do not generate DiamondIQ inferences.
+
+14. Do not use general/model baseball knowledge.
+
+15. Do not use fixture records.
+
+16. Do not modify Jobs #1-9 or their existing records except for relationships/provenance that this approved Job #10 architecture explicitly creates without changing their canonical facts.
+
+POST-COMMIT RECONCILIATION
+
+After the transaction completes, STOP all further work and perform a read-only verification.
+
+Report:
+
+A. Job #10 final status and commit timestamp.
+
+B. Exact rows actually created in:
+- historical_rankings
+- player_evaluation_observations
+- player_season_statistics
+- source_player_identity_links
+- ingestion_review_holds
+- record_source_assertions
+
+C. Break historical_rankings down by provider.
+
+D. Break player_season_statistics down by provider/league.
+
+E. Break source_player_identity_links down by:
+- deterministic_link
+- candidate_link
+- unlinked
+- rejected
+
+F. Confirm the number of unique source observations represented by those identity links so that multiple candidate relationships are not mistaken for multiple source observations.
+
+G. Verify the one expected Cape missing-name review hold.
+
+H. Verify the eight Cape duplicate source events and their retained provenance.
+
+I. Confirm:
+- existing canonical player facts overwritten: 0
+- new canonical player identities created: 0
+- candidate relationships promoted to canonical identities: 0
+- missing values filled or calculated: 0
+- provider metrics reinterpreted: 0
+- fixture records used: 0
+- general/model baseball knowledge used: 0
+- DiamondIQ inferences generated: 0
+
+J. Reconcile every actual count against the approved dry-run counts above.
+
+If ANY material count differs from the approved dry-run:
+- do not attempt to fix it automatically,
+- do not rerun the import,
+- do not alter mappings,
+- report the discrepancy and its cause.
+
+K. Run duplicate-integrity checks to confirm that repeated appearances across provider, season, role, ranking, batting, and pitching contexts were not improperly collapsed.
+
+L. Confirm Job #10 source-file hash matches the dry-run source-file hash.
+
+After reporting the reconciliation, STOP.
+
+Do not begin report-generation changes, backtesting, prediction work, or another supplemental ingestion batch.
