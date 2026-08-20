@@ -1,0 +1,55 @@
+Before we introduce the next supplemental evidence workbook, perform a READ-ONLY post-commit verification of Job #9 — the Comprehensive Draft Database 2012–2025.
+
+Do not modify code, schema, records, mappings, review holds, reports, or methodology during this step.
+
+I need a concise verification report confirming:
+
+1. Job #9 current status and commit timestamp.
+
+2. Exact number of production records created or updated by Job #9, broken down by destination table.
+
+3. Exact historical year coverage now present from Job #9.
+
+4. Exact counts by draft year.
+
+5. Exact counts by outcome/pathway where the source supports them:
+   - drafted
+   - undrafted
+   - signed / free-agent signed
+   - unresolved or other source-defined outcomes
+Do not infer an outcome where the source does not explicitly support it.
+
+6. Exact number of source assertions created by Job #9 and confirmation that they retain source-file, worksheet, row, and file-version provenance where available.
+
+7. Review holds:
+   - confirm the reported 26 total
+   - break them down by reason
+   - confirm that held records were not silently merged or discarded.
+
+8. Duplicate protection:
+   - number of exact duplicates prevented
+   - number of existing production records corroborated rather than duplicated
+   - number of unresolved possible duplicates/identity conflicts.
+
+9. Confirm that Job #9 did not overwrite higher-confidence existing production facts merely because the comprehensive workbook contained another value.
+
+10. Confirm fixture records used or created by Job #9 = 0.
+
+11. Confirm no model/general AI baseball knowledge was used to fill missing values, resolve player identities, infer outcomes, or fabricate records.
+
+12. Confirm missing source values remained missing and were not converted to zero, false, unsigned, undrafted, or another factual value.
+
+13. Report the current TOTAL production coverage after Job #9:
+    - unique draft/player records
+    - seasons represented
+    - earliest season
+    - latest season
+    - source files contributing to the historical draft population.
+
+14. Identify any material data-quality problem discovered during this verification that should stop us from uploading the next dataset.
+
+This is verification only.
+
+Do NOT begin work on the PBR, Perfect Game, Cape Cod League, or Appalachian League datasets yet.
+
+Stop after presenting the Job #9 verification report.
