@@ -1,0 +1,153 @@
+I approve the general Supplemental Evidence Batch 1 architecture with the modifications below.
+
+You may IMPLEMENT THE SCHEMA AND PREPARE THE COMMIT, but DO NOT COMMIT JOB #10 yet.
+
+APPROVED ARCHITECTURE
+
+1. Continue using historical_rankings for PBR and Perfect Game ranking observations.
+
+2. Add historical_rankings.ranking_context JSONB as proposed.
+
+3. Create player_evaluation_observations for PBR evaluation/showcase/profile evidence.
+
+4. Create player_season_statistics for Perfect Game, Cape Cod League, and Appalachian League player-season performance.
+
+5. Create source_player_identity_links to separate source observations from canonical player identity resolution.
+
+IDENTITY-LINK MODIFICATION
+
+Do NOT create thousands of active ingestion_review_holds merely because an observation has a possible identity relationship.
+
+Use these relationship states:
+
+- deterministic_link
+- candidate_link
+- unlinked
+- rejected
+
+A deterministic link may be created only when the documented matching criteria produce exactly one compatible production identity.
+
+A candidate link must preserve:
+- candidate draft_players ID
+- matching fields
+- reason the relationship is not deterministic
+- source observation
+- provenance
+
+Candidate links are NOT canonical identity merges and should NOT alter draft_players.
+
+Do not create an active manual review hold for every candidate link.
+
+Create ingestion_review_holds only for records that prevent safe ingestion of the underlying observation itself, such as:
+- missing required observation identity/name
+- internally contradictory source-event identity
+- another condition that prevents the observation from being stored faithfully
+
+The 8,300 possible identity relationships should therefore remain candidate links, not 8,300 active review holds.
+
+The one Cape Cod row with no player name should remain an actual review hold.
+
+SOURCE OBSERVATIONS
+
+Unlinked observations are valuable historical evidence.
+
+Do not discard an observation merely because it cannot currently be linked to draft_players.
+
+Do not create a new canonical draft_players identity solely because an observation exists.
+
+RANKINGS
+
+Preserve PBR and Perfect Game rankings as independent publisher observations.
+
+For Perfect Game:
+- deduplicate repeated BestRank only at the identical source ranking-context level
+- preserve PlayerID
+- preserve GradYear
+- preserve BestRank
+- preserve Best PG Grade
+- preserve Top-100/sample context
+- preserve provenance
+
+Do not collapse PBR and PG rankings together.
+
+STATISTICS AND MEASUREMENTS
+
+Preserve source metric names and source-provided values.
+
+Do not normalize or reinterpret provider-specific metrics during ingestion.
+
+Preserve raw position codes.
+
+Do not silently convert:
+MIF, TWP, DH, IF, X, RHP, LHP, or other provider codes into another position system.
+
+Missing values remain NULL.
+
+Do not calculate missing statistics.
+
+Preserve unusual source-provided statistics, including extreme small-sample rates, together with their available sample denominators.
+
+PROVENANCE
+
+Every ranking, evaluation observation, player-season observation, and identity relationship must retain sufficient provenance to reconstruct:
+
+- ingestion job
+- source file version
+- provider
+- source file
+- worksheet
+- source row
+- source URL where supplied
+- source player ID where supplied
+- season/class year
+- source context
+
+SOURCE DEDUPLICATION
+
+The eight exact Cape Cod duplicate source rows may be collapsed into their corresponding source events while preserving provenance for both source rows.
+
+Do not deduplicate observations merely because the same player appears in:
+- multiple providers
+- multiple seasons
+- batting and pitching datasets
+- ranking and performance datasets
+- multiple independent source files
+
+Those are independent evidence observations.
+
+IMPORTANT FUTURE USE
+
+This database is being constructed for historical evidence analysis and retrospective backtesting.
+
+Therefore preserve PRE-DRAFT information independently from eventual draft outcome information.
+
+Do not contaminate historical evaluation observations with facts learned later merely because the player can be linked to a later draft record.
+
+We must eventually be able to ask:
+"What information was actually available about this player at this historical point in time?"
+
+IMPLEMENTATION VERIFICATION
+
+After implementing the schema and parser/mapping logic, perform a DRY-RUN of Job #10 and report:
+
+1. Exact proposed rows by destination table.
+2. Ranking observations.
+3. Evaluation observations.
+4. Player-season statistics.
+5. Deterministic identity links.
+6. Candidate identity links.
+7. Unlinked observations.
+8. Actual review holds.
+9. Exact-source duplicates collapsed.
+10. Source assertions/provenance records.
+11. Missing values preserved.
+12. Existing production records that would be modified, if any.
+13. Existing canonical player facts that would be overwritten, if any.
+14. Fixture records involved.
+15. Model/general AI baseball knowledge used.
+16. DiamondIQ inferences generated.
+17. Any discrepancy between this dry-run and the approved pre-commit mapping totals.
+
+DO NOT COMMIT JOB #10.
+
+STOP and wait for explicit OSM approval after presenting the dry-run verification.

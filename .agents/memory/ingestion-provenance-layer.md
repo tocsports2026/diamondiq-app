@@ -158,3 +158,8 @@ draft_players query: WHERE mlb_org = $club AND is_fixture=FALSE, ORDER BY draft_
 - stage 6 (Google Drive connector): NOT STARTED
 - OSM article annotations pipeline (osm_article_annotations): NOT STARTED
 - No remaining stuck MAPPED jobs — all 7 jobs are complete or preview (job #2 = preview test file)
+
+## Supplemental observation identity links
+- Possible source-player relationships are `candidate_link` records, not ingestion review holds; only source rows that cannot be stored faithfully receive holds.
+- **Why:** Unlinked and ambiguous amateur observations remain valuable historical evidence, while thousands of manual holds obscure genuinely malformed records.
+- **How to apply:** Keep source observations separate from `draft_players`; create one candidate relationship per production candidate, retain matching fields/reason/provenance, and never auto-merge a candidate relationship.

@@ -451,8 +451,112 @@ CREATE TABLE IF NOT EXISTS historical_rankings (
   approved_record_id INTEGER,
   is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
   source_worksheet TEXT,
-  source_unique_id TEXT
+  source_unique_id TEXT,
+  -- Source-specific ranking semantics, such as publisher list type, class year,
+  -- Best PG Grade, sample scope, and supporting source rows.
+  ranking_context JSONB NOT NULL DEFAULT '{}'
 );
+
+-- Layer 1: source-preserved profile, showcase, and evaluation observations.
+-- These are intentionally separate from draft_players so a later draft fact
+-- never overwrites information that was available at the time of evaluation.
+CREATE TABLE IF NOT EXISTS player_evaluation_observations (
+  id SERIAL PRIMARY KEY,
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  ingestion_job_id INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+  source_worksheet TEXT NOT NULL,
+  source_excel_row INTEGER NOT NULL,
+  source_excel_column TEXT,
+  source_preamble TEXT,
+  source_file TEXT,
+  source_url TEXT,
+  source_provider TEXT NOT NULL,
+  source_unique_id TEXT,
+  player_name TEXT NOT NULL,
+  class_year INTEGER,
+  state TEXT,
+  school TEXT,
+  position TEXT,
+  commitment TEXT,
+  observation_scope TEXT NOT NULL CHECK (observation_scope IN ('hitter','pitcher','other')),
+  metrics JSONB NOT NULL DEFAULT '{}',
+  source_context JSONB NOT NULL DEFAULT '{}',
+  evidence_class TEXT NOT NULL DEFAULT 'verified_public'
+    CHECK (evidence_class = 'verified_public'),
+  verification_status TEXT NOT NULL DEFAULT 'unverified'
+    CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
+  is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (source_file_version_id, source_worksheet, source_excel_row, observation_scope)
+);
+
+-- Layer 1: source-preserved player-season batting and pitching observations.
+-- Provider-specific metric names and values stay intact in statistics.
+CREATE TABLE IF NOT EXISTS player_season_statistics (
+  id SERIAL PRIMARY KEY,
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  ingestion_job_id INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+  source_worksheet TEXT NOT NULL,
+  source_excel_row INTEGER NOT NULL,
+  source_excel_column TEXT,
+  source_preamble TEXT,
+  source_file TEXT,
+  source_url TEXT,
+  source_provider TEXT NOT NULL,
+  source_unique_id TEXT,
+  player_name TEXT NOT NULL,
+  league TEXT,
+  season_year INTEGER,
+  class_year INTEGER,
+  team TEXT,
+  position TEXT,
+  statistic_type TEXT NOT NULL CHECK (statistic_type IN ('batting','pitching')),
+  sample_scope TEXT,
+  statistics JSONB NOT NULL DEFAULT '{}',
+  source_context JSONB NOT NULL DEFAULT '{}',
+  evidence_class TEXT NOT NULL DEFAULT 'verified_public'
+    CHECK (evidence_class = 'verified_public'),
+  verification_status TEXT NOT NULL DEFAULT 'unverified'
+    CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
+  is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (source_file_version_id, source_worksheet, source_excel_row, statistic_type)
+);
+
+-- Source observations and canonical draft-player identities are related here,
+-- rather than merged. Candidate rows remain non-canonical evidence relationships.
+CREATE TABLE IF NOT EXISTS source_player_identity_links (
+  id SERIAL PRIMARY KEY,
+  dataset_id INTEGER REFERENCES data_library(id) ON DELETE SET NULL,
+  source_file_version_id INTEGER REFERENCES source_file_versions(id) ON DELETE SET NULL,
+  ingestion_job_id INTEGER REFERENCES ingestion_jobs(id) ON DELETE SET NULL,
+  source_observation_table TEXT NOT NULL
+    CHECK (source_observation_table IN ('player_evaluation_observations','player_season_statistics')),
+  source_observation_id INTEGER,
+  source_event_key TEXT NOT NULL,
+  source_worksheet TEXT NOT NULL,
+  source_excel_row INTEGER NOT NULL,
+  source_file TEXT,
+  source_url TEXT,
+  source_provider TEXT NOT NULL,
+  source_unique_id TEXT,
+  player_name TEXT NOT NULL,
+  source_identity_key TEXT NOT NULL,
+  candidate_draft_player_id INTEGER REFERENCES draft_players(id) ON DELETE SET NULL,
+  link_status TEXT NOT NULL
+    CHECK (link_status IN ('deterministic_link','candidate_link','unlinked','rejected')),
+  matching_fields JSONB NOT NULL DEFAULT '{}',
+  link_reason TEXT NOT NULL,
+  source_context JSONB NOT NULL DEFAULT '{}',
+  is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_source_player_identity_links_job
+  ON source_player_identity_links (ingestion_job_id);
+CREATE INDEX IF NOT EXISTS idx_source_player_identity_links_candidate
+  ON source_player_identity_links (candidate_draft_player_id);
 
 -- Layer 1: club-level payroll and CBT (Luxury Tax) history.
 -- Rows are normalized: one row per (mlb_org, season).

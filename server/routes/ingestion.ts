@@ -28,6 +28,11 @@ import crypto from "crypto";
 import * as XLSX from "xlsx";
 import { requireAdmin, requireStaff } from "../middleware/auth";
 import pool, { query, queryOne } from "../db";
+import {
+  buildSupplementalEvidenceBatch1Plan,
+  isSupplementalEvidenceBatch1,
+  type ProductionDraftPlayer,
+} from "../ingestion/supplementalEvidenceBatch1";
 
 const router = Router();
 
@@ -826,7 +831,7 @@ router.post("/:jobId/classify", requireAdmin, async (req, res) => {
 router.post("/:jobId/commit-preview", requireAdmin, async (req, res) => {
   try {
     const job = await queryOne<Record<string, unknown>>(
-      `SELECT ij.id, ij.status, ij.parsed_structure, ij.column_map,
+      `SELECT ij.id, ij.status, ij.file_path, ij.parsed_structure, ij.column_map,
               ij.source_file_version_id, ij.dataset_id,
               sfv.file_hash, sfv.original_filename
        FROM ingestion_jobs ij
@@ -837,6 +842,84 @@ router.post("/:jobId/commit-preview", requireAdmin, async (req, res) => {
     if (!job) return res.status(404).json({ ok: false, error: "Job not found." });
     if (job.status === "complete" || job.status === "cancelled") {
       return res.status(409).json({ ok: false, error: `Cannot preview a ${job.status} job.` });
+    }
+
+    // Supplemental Evidence Batch 1 has approved source-specific mapping rules.
+    // Its dry-run is row/event based, never the generic per-column preview below.
+    const filePath = job.file_path as string | null;
+    if (filePath && fs.existsSync(filePath)) {
+      const workbook = XLSX.readFile(filePath, { type: "file", raw: true });
+      if (isSupplementalEvidenceBatch1(workbook)) {
+        const productionDraftPlayers = await query<ProductionDraftPlayer>(
+          `SELECT id, player_name, draft_year, school, position, state
+           FROM draft_players
+           WHERE is_fixture = FALSE`
+        );
+        const plan = buildSupplementalEvidenceBatch1Plan(workbook, productionDraftPlayers);
+        const rankingBySource = plan.rankings.reduce<Record<string, number>>((counts, ranking) => {
+          counts[ranking.rankingSource] = (counts[ranking.rankingSource] ?? 0) + 1;
+          return counts;
+        }, {});
+        const statisticsByProvider = plan.statistics.reduce<Record<string, number>>((counts, statistic) => {
+          counts[statistic.provider] = (counts[statistic.provider] ?? 0) + 1;
+          return counts;
+        }, {});
+        const pgRankingAssertions = plan.rankings.reduce(
+          (count, ranking) => count + Math.max(0, ranking.sourceReferences.length - 1),
+          0
+        );
+
+        return res.json({
+          ok: true,
+          data: {
+            jobId: job.id,
+            status: job.status,
+            mode: "supplemental_evidence_batch_1_dry_run",
+            commitPerformed: false,
+            sourceFileVersionId: job.source_file_version_id,
+            summary: plan.summary,
+            destinations: {
+              historical_rankings: {
+                rows: plan.rankings.length,
+                byPublisher: rankingBySource,
+              },
+              player_evaluation_observations: plan.evaluations.length,
+              player_season_statistics: {
+                rows: plan.statistics.length,
+                byProvider: statisticsByProvider,
+              },
+              source_player_identity_links: {
+                rows: plan.identityLinks.length,
+                deterministic: plan.summary.deterministicIdentityLinks,
+                candidate: plan.summary.candidateIdentityLinks,
+                unlinked: plan.summary.unlinkedIdentityLinks,
+              },
+              ingestion_review_holds: plan.reviewHolds.length,
+              record_source_assertions: {
+                rows: plan.summary.sourceAssertions,
+                perfectGameRankingProvenance: pgRankingAssertions,
+                exactCapeDuplicateProvenance: plan.sourceDuplicateAssertions.length,
+              },
+            },
+            safeguards: {
+              existingProductionRecordsModified: 0,
+              existingCanonicalPlayerFactsOverwritten: 0,
+              fixtureRecordsInvolved: 0,
+              missingValuesPreserved: true,
+              providerSpecificMetricsReinterpreted: false,
+              generalAiBaseballKnowledgeUsed: false,
+              diamondIQInferencesGenerated: 0,
+            },
+            discrepancyFromApprovedMapping: {
+              approvedSourceRows: 24737,
+              dryRunSourceRows: plan.summary.inputSourceRows,
+              approvedRankingEstimate: 7215,
+              dryRunRankings: plan.summary.rankings,
+              note: "Perfect Game BestRank is deduplicated only when PlayerID, GradYear, BestRank, Best PG Grade, and Top-100 context are identical; every additional supporting source row is retained as provenance.",
+            },
+          },
+        });
+      }
     }
 
     const ps = job.parsed_structure as { worksheets: ParsedWorksheet[] } | null;
@@ -1297,6 +1380,212 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
     const sfvId  = job.source_file_version_id;
     const jobId  = job.id;
     const datasetId = job.dataset_id;
+
+    // ── Supplemental Evidence Batch 1 commit path ─────────────────────────────
+    // This branch only runs after a separate OSM-approved commit request. Its
+    // plan is shared with commit-preview so dry-run and commit counts cannot drift.
+    if (isSupplementalEvidenceBatch1(wb)) {
+      const productionResult = await client.query<ProductionDraftPlayer>(
+        `SELECT id, player_name, draft_year, school, position, state
+         FROM draft_players
+         WHERE is_fixture = FALSE`
+      );
+      const plan = buildSupplementalEvidenceBatch1Plan(wb, productionResult.rows);
+      const observationIds = new Map<string, { table: string; id: number }>();
+      let sourceAssertionsCreated = 0;
+
+      await client.query("BEGIN");
+
+      for (const ranking of plan.rankings) {
+        const primary = ranking.sourceReferences[0];
+        const inserted = await client.query<{ id: number }>(
+          `INSERT INTO historical_rankings
+             (dataset_id, source_file_version_id, ingestion_job_id,
+              source_row, source_worksheet, source_excel_column, source_preamble,
+              source_unique_id, player_name, ranking_source, ranking_year, rank_position,
+              school, position, source_provider, ranking_context,
+              evidence_class, verification_status, is_fixture)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+                   'verified_public','unverified',FALSE)
+           RETURNING id`,
+          [
+            datasetId, sfvId, jobId,
+            primary.sourceExcelRow, primary.sourceWorksheet, ranking.sourceColumn, primary.sourcePreamble,
+            ranking.sourceUniqueId, ranking.playerName, ranking.rankingSource, ranking.rankingYear,
+            ranking.rankPosition, ranking.school, ranking.position, primary.provider,
+            JSON.stringify(ranking.rankingContext),
+          ]
+        );
+        const rankingId = inserted.rows[0].id;
+
+        for (const supportingReference of ranking.sourceReferences.slice(1)) {
+          await client.query(
+            `INSERT INTO record_source_assertions
+               (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+                worksheet, excel_row, excel_column, source_preamble, asserted_value,
+                conflicts_with_canonical, conflict_delta)
+             VALUES ('historical_rankings',$1,$2,$3,$4,$5,$6,$7,$8,FALSE,NULL)`,
+            [
+              rankingId, sfvId, jobId,
+              supportingReference.sourceWorksheet, supportingReference.sourceExcelRow,
+              ranking.sourceColumn, supportingReference.sourcePreamble,
+              JSON.stringify({
+                rank_position: ranking.rankPosition,
+                ranking_context: ranking.rankingContext,
+              }),
+            ]
+          );
+          sourceAssertionsCreated++;
+        }
+      }
+
+      for (const evaluation of plan.evaluations) {
+        const source = evaluation.sourceReference;
+        const inserted = await client.query<{ id: number }>(
+          `INSERT INTO player_evaluation_observations
+             (dataset_id, source_file_version_id, ingestion_job_id,
+              source_worksheet, source_excel_row, source_excel_column, source_preamble,
+              source_file, source_url, source_provider, source_unique_id, player_name,
+              class_year, state, school, position, commitment, observation_scope,
+              metrics, source_context, evidence_class, verification_status, is_fixture)
+           VALUES ($1,$2,$3,$4,$5,'All source metrics',$6,$7,$8,$9,NULL,$10,
+                   $11,$12,$13,$14,$15,$16,$17,$18,'verified_public','unverified',FALSE)
+           RETURNING id`,
+          [
+            datasetId, sfvId, jobId,
+            source.sourceWorksheet, source.sourceExcelRow, source.sourcePreamble,
+            source.sourceFile, source.sourceUrl, source.provider, evaluation.playerName,
+            evaluation.classYear, evaluation.state, evaluation.school, evaluation.position,
+            evaluation.commitment, evaluation.observationScope,
+            JSON.stringify(evaluation.metrics), JSON.stringify(evaluation.sourceContext),
+          ]
+        );
+        observationIds.set(evaluation.eventKey, {
+          table: "player_evaluation_observations",
+          id: inserted.rows[0].id,
+        });
+      }
+
+      for (const statistic of plan.statistics) {
+        const source = statistic.sourceReferences[0];
+        const inserted = await client.query<{ id: number }>(
+          `INSERT INTO player_season_statistics
+             (dataset_id, source_file_version_id, ingestion_job_id,
+              source_worksheet, source_excel_row, source_excel_column, source_preamble,
+              source_file, source_url, source_provider, source_unique_id, player_name,
+              league, season_year, class_year, team, position, statistic_type, sample_scope,
+              statistics, source_context, evidence_class, verification_status, is_fixture)
+           VALUES ($1,$2,$3,$4,$5,'All source metrics',$6,$7,$8,$9,$10,$11,
+                   $12,$13,$14,$15,$16,$17,$18,$19,$20,'verified_public','unverified',FALSE)
+           RETURNING id`,
+          [
+            datasetId, sfvId, jobId,
+            source.sourceWorksheet, source.sourceExcelRow, source.sourcePreamble,
+            source.sourceFile, source.sourceUrl, statistic.provider, statistic.sourceUniqueId,
+            statistic.playerName, statistic.league, statistic.seasonYear, statistic.classYear,
+            statistic.team, statistic.position, statistic.statisticType, statistic.sampleScope,
+            JSON.stringify(statistic.statistics), JSON.stringify(statistic.sourceContext),
+          ]
+        );
+        observationIds.set(statistic.eventKey, {
+          table: "player_season_statistics",
+          id: inserted.rows[0].id,
+        });
+      }
+
+      for (const duplicate of plan.sourceDuplicateAssertions) {
+        const canonical = observationIds.get(duplicate.statisticEventKey);
+        if (!canonical) throw new Error("Supplemental duplicate source event is missing its canonical statistic.");
+        await client.query(
+          `INSERT INTO record_source_assertions
+             (canonical_record_table, canonical_record_id, source_file_version_id, ingestion_job_id,
+              worksheet, excel_row, excel_column, source_preamble, asserted_value,
+              conflicts_with_canonical, conflict_delta)
+           VALUES ($1,$2,$3,$4,$5,$6,'All source metrics',$7,$8,FALSE,NULL)`,
+          [
+            canonical.table, canonical.id, sfvId, jobId,
+            duplicate.sourceReference.sourceWorksheet, duplicate.sourceReference.sourceExcelRow,
+            duplicate.sourceReference.sourcePreamble, duplicate.assertedValue,
+          ]
+        );
+        sourceAssertionsCreated++;
+      }
+
+      for (const link of plan.identityLinks) {
+        const observation = observationIds.get(link.sourceEventKey);
+        if (!observation) throw new Error("Supplemental identity link is missing its source observation.");
+        await client.query(
+          `INSERT INTO source_player_identity_links
+             (dataset_id, source_file_version_id, ingestion_job_id,
+              source_observation_table, source_observation_id, source_event_key,
+              source_worksheet, source_excel_row, source_file, source_url, source_provider,
+              source_unique_id, player_name, source_identity_key, candidate_draft_player_id,
+              link_status, matching_fields, link_reason, source_context, is_fixture)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,FALSE)`,
+          [
+            datasetId, sfvId, jobId,
+            observation.table, observation.id, link.sourceEventKey,
+            link.sourceReference.sourceWorksheet, link.sourceReference.sourceExcelRow,
+            link.sourceReference.sourceFile, link.sourceReference.sourceUrl, link.sourceReference.provider,
+            link.sourceUniqueId, link.playerName, link.identityKey, link.candidateDraftPlayerId,
+            link.linkStatus, JSON.stringify(link.matchingFields), link.linkReason,
+            JSON.stringify(link.sourceContext),
+          ]
+        );
+      }
+
+      for (const hold of plan.reviewHolds) {
+        await client.query(
+          `INSERT INTO ingestion_review_holds
+             (dataset_id, source_file_version_id, ingestion_job_id,
+              source_worksheet, source_excel_row, source_unique_id, player_name,
+              draft_year, hold_reason, source_row_data, is_fixture)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE)`,
+          [
+            datasetId, sfvId, jobId,
+            hold.sourceReference.sourceWorksheet, hold.sourceReference.sourceExcelRow,
+            hold.sourceUniqueId, hold.playerName, hold.sourceYear, hold.reason,
+            JSON.stringify(hold.sourceRecord),
+          ]
+        );
+      }
+
+      await client.query(
+        `UPDATE ingestion_jobs
+         SET status='complete', completed_at=NOW(), rows_imported=$1,
+             rows_skipped=$2, rows_errored=0
+         WHERE id=$3`,
+        [
+          plan.rankings.length + plan.evaluations.length + plan.statistics.length,
+          plan.reviewHolds.length,
+          jobId,
+        ]
+      );
+      await client.query(
+        `UPDATE data_library SET processing_status='ready', last_import_at=NOW() WHERE id=$1`,
+        [datasetId]
+      );
+      await client.query("COMMIT");
+
+      return res.json({
+        ok: true,
+        data: {
+          jobId,
+          status: "complete",
+          mode: "supplemental_evidence_batch_1",
+          rankingsCreated: plan.rankings.length,
+          evaluationsCreated: plan.evaluations.length,
+          playerSeasonStatisticsCreated: plan.statistics.length,
+          identityLinksCreated: plan.identityLinks.length,
+          reviewHoldsCreated: plan.reviewHolds.length,
+          sourceAssertionsCreated,
+          existingProductionRecordsModified: 0,
+          existingCanonicalPlayerFactsOverwritten: 0,
+          fixtureRecordsInvolved: 0,
+          diamondIQInferencesCreated: 0,
+        },
+      });
+    }
 
     // Helper: read a sheet's rows starting from array index 4 (after preamble + header at idx 3)
     function sheetRows(name: string): (string|number|boolean|null)[][] {
