@@ -1,0 +1,58 @@
+Before uploading the next supplemental evidence batch, resolve ONLY the inherited 2026 slot-value ambiguity identified in the Job #9 verification.
+
+This is a narrow data-quality correction.
+
+DO NOT redesign schema or methodology.
+DO NOT modify Job #9 records.
+DO NOT touch unrelated player, ranking, payroll, draft-spend, article, or inference data.
+DO NOT generate new DiamondIQ analysis.
+
+ISSUE:
+
+Job #9 correctly preserved 300 blank source slot-value entries as NULL assertions.
+
+However, the corresponding existing canonical slot_values rows currently contain $0 values created by Job #8.
+
+A missing/unknown slot value must not be represented as factual $0 unless a source explicitly states $0.
+
+TASK:
+
+1. Identify every non-fixture 2026 slot_values row whose canonical slot_value = 0.
+
+2. Trace each one back through its source assertions and ingestion provenance.
+
+3. Divide them into:
+   A. Source explicitly reports $0
+   B. Source value was blank/missing/null
+   C. Conflicting or otherwise unresolved
+
+4. For category B:
+   - correct the canonical slot value from 0 to NULL
+   - preserve all source provenance
+   - do not delete source assertions
+   - record the correction/audit trail using the existing provenance or correction mechanism
+
+5. For category A:
+   - retain $0 only if a source explicitly supports it
+
+6. For category C:
+   - do not guess
+   - preserve as unresolved/review-held if necessary
+
+7. Verify that legitimate nonzero 2026 slot values are unchanged.
+
+REPORT BACK WITH:
+
+- number of canonical 2026 $0 slot rows inspected
+- number changed from $0 to NULL
+- number retained as source-supported $0
+- number held unresolved
+- exact source/job that originally created the incorrect zero values
+- confirmation no legitimate nonzero slot values changed
+- fixture records used
+- model/general AI knowledge used
+- DiamondIQ inferences generated
+- any unexpected issue
+
+STOP after this correction.
+Do not begin supplemental dataset work yet.
