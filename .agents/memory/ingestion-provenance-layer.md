@@ -73,6 +73,11 @@ NEVER silently substitute AI/model knowledge.
 - Stage 5 (commit — write production rows): BUILT AND IN USE
 - Stage 6 (Google Drive connector): NOT STARTED
 
+## Temporary Preview Source Files
+- Preview-job metadata can outlive its source file when the upload was staged under `/tmp`; restarting a workflow may clear that temporary copy while the source-file-version record remains.
+- **Why:** A commit must never assume that a persisted preview path still points to the originally hash-verified workbook.
+- **How to apply:** Before retrying a preview commit after a restart, compare the available upload's SHA-256 and byte size with the recorded source-file version, then re-stage the verified file at the recorded path immediately before committing.
+
 ## Commit Endpoint — Multi-Mode Detection (CRITICAL)
 Detection logic (in this order inside POST /:jobId/commit):
 1. "SOURCE INDEX" sheet → article transcription path (Job #7)
