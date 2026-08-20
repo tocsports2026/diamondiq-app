@@ -1,0 +1,229 @@
+TASK: Supplemental Evidence Batch 1 — PRE-COMMIT MAPPING AND SCHEMA REVIEW ONLY
+
+I have uploaded DiamondIQ_Supplemental_Evidence_Batch1_Ingestion.xlsx.
+
+This workbook was compiled from multiple historical baseball evidence sources to expand DiamondIQ's factual comparison population and improve future historical backtesting.
+
+This is a MAPPING / DESIGN REVIEW ONLY.
+
+DO NOT COMMIT ANY RECORDS.
+DO NOT MODIFY EXISTING PRODUCTION RECORDS.
+DO NOT GENERATE DIAMONDIQ INFERENCES.
+DO NOT CREATE SIMILARITY SCORES OR PREDICTIONS.
+DO NOT FILL MISSING VALUES.
+DO NOT AUTO-MERGE PLAYER IDENTITIES.
+
+OBJECTIVE
+
+Determine how this workbook should be incorporated into DiamondIQ while preserving the distinction between independent evidence sources.
+
+The workbook contains supplemental evidence from:
+
+1. PBR ranked-athlete data
+2. Perfect Game advanced-stat / ranked-player data
+3. Cape Cod League historical statistics
+4. Appalachian League historical statistics
+
+These sources should supplement the existing historical draft/outcome population. They should NOT replace existing draft facts merely because another source contains information about the same athlete.
+
+IMPORTANT EVIDENCE PRINCIPLE
+
+The same athlete appearing in multiple datasets is valuable corroboration.
+
+Do not collapse independent source observations into one source record.
+
+Player identity linkage and source-event deduplication are separate concepts.
+
+An exact or safely resolved athlete identity may link evidence from multiple sources to the same athlete, while retaining each source observation and its provenance independently.
+
+Ambiguous identities must be review-held rather than automatically merged.
+
+REVIEW THE ENTIRE WORKBOOK AND REPORT:
+
+1. WORKBOOK INVENTORY
+For every worksheet:
+- worksheet name
+- source/provider
+- intended evidence type
+- year coverage
+- row count
+- column count
+- detected header row
+- source preamble/metadata
+- whether the sheet contains player-level observations, rankings, measurements, statistics, or metadata
+
+2. PROPOSED DESTINATION ARCHITECTURE
+
+For every worksheet and meaningful field, identify the proposed destination.
+
+Prefer existing canonical tables where they are semantically correct.
+
+If existing schema cannot faithfully represent an evidence type, propose the minimum necessary schema addition.
+
+Do NOT force:
+- summer-league statistics into draft_players
+- rankings into generic player facts
+- measurements into unrelated statistical fields
+- source-specific metrics into fields with different definitions
+
+3. PLAYER IDENTITY STRATEGY
+
+Report how records could be linked to existing player identities using only documented fields such as:
+- exact normalized name
+- year
+- school
+- position
+- DOB where available
+- B/T
+- other source-provided identifiers
+
+Do not use fuzzy matching to silently merge players.
+
+Classify potential relationships as:
+A. deterministic/high-confidence linkage
+B. possible linkage requiring review
+C. no existing production identity found
+
+Give counts for each category by source.
+
+4. HISTORICAL RANKINGS
+
+Determine how PBR and Perfect Game rankings should coexist with existing historical_rankings.
+
+Preserve:
+- publisher/source
+- ranking date/year
+- class/draft class where supplied
+- rank
+- player identity
+- source-specific ranking context
+- provenance
+
+Do not treat one publisher's ranking as interchangeable with another publisher's ranking.
+
+5. SUMMER-LEAGUE PERFORMANCE
+
+Determine the appropriate structure for Cape Cod League and Appalachian League performance.
+
+Preserve source-provided:
+- league
+- season
+- team
+- player
+- position
+- batting/pitching statistics
+- games/appearances
+- rate statistics
+- counting statistics
+- source-specific fields
+- provenance
+
+Do not calculate missing statistics during ingestion.
+
+If a statistic is supplied by the source, preserve it.
+If it is absent, leave it absent.
+
+6. PERFECT GAME ADVANCED DATA
+
+Identify each advanced metric actually supplied by the workbook.
+
+Do not reinterpret metric definitions.
+
+Report whether each metric:
+- already has a semantically equivalent DiamondIQ field
+- requires a source-specific field
+- belongs in a general player-observation/statistics structure
+
+7. OVERLAP WITH EXISTING PRODUCTION DATA
+
+Without modifying production, report:
+- records/players that appear to overlap existing draft_players
+- records that corroborate existing facts
+- factual conflicts
+- ambiguous identity relationships
+- completely new historical player identities
+
+Do not resolve conflicts during this review.
+
+8. PROVENANCE REQUIREMENTS
+
+Every eventual imported observation must retain, where available:
+- ingestion job
+- source file version
+- original source/provider
+- source worksheet
+- source row
+- source column where appropriate
+- season/year
+- source-specific context
+
+9. MISSING VALUES
+
+Confirm that:
+- blanks remain NULL
+- missing rankings are not converted to zero
+- missing statistics are not calculated
+- missing handedness is not inferred
+- missing positions are not inferred
+- missing schools are not inferred
+- missing outcomes are not inferred
+- absence from a professional dataset is not treated as proof of an amateur outcome
+
+10. BACKTESTING VALUE
+
+Without generating predictions, explain which factual dimensions this batch will add to future historical cohort/backtesting analysis.
+
+Specifically identify whether the batch improves coverage of:
+- historical rankings
+- position
+- B/T
+- physical measurements
+- amateur performance
+- summer-league performance
+- advanced performance metrics
+- draft-year longitudinal history
+- drafted vs. undrafted comparison populations
+
+Do not claim that any added field improves predictive accuracy until formally tested.
+
+11. DATA QUALITY
+
+Identify:
+- duplicate source rows
+- contradictory observations
+- malformed values
+- inconsistent position codes
+- inconsistent player names
+- year/season anomalies
+- suspicious zero values
+- impossible or highly anomalous statistical values
+- any source-definition differences that could make apparently similar statistics non-comparable
+
+Do not silently correct them.
+
+12. PRE-COMMIT TOTALS
+
+Provide proposed counts for:
+- new player identities
+- linked existing identities
+- ambiguous identities/review holds
+- ranking observations
+- summer-league player-season observations
+- advanced-stat observations
+- other observation types
+- source assertions
+- conflicts
+- proposed new tables/columns, if any
+
+13. SAFEGUARDS
+
+Confirm:
+- production records changed = 0
+- records committed = 0
+- fixture records used = 0
+- model/general AI baseball knowledge used = 0
+- DiamondIQ inferences generated = 0
+
+STOP after presenting the complete pre-commit review.
+
+Do not implement schema changes and do not commit the workbook until OSM explicitly approves the proposed mapping.
