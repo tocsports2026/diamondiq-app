@@ -88,6 +88,47 @@ Until OSM separately approves the detailed Draft Result components and scoring r
 
 This lock records product and validation objectives only. It does not authorize analytical implementation, retrospective testing, scoring, or changes to production behavior.
 
+## Validation scoring framework structure
+
+**Status: OSM-approved top-level framework; scoring implementation remains locked.**
+
+The formally approved top-level DiamondIQ validation scoring categories are:
+
+1. Comparison Population Quality
+2. Draft Result Alignment
+3. Differentiating-Factor Identification
+4. Risk / Opportunity Assessment
+5. Evidence Integrity
+
+### Category 1 — Comparison Population Quality
+
+A DiamondIQ comparison population is valid when its inclusion criteria are based entirely on documented characteristics known at the historical assessment date, the criteria are materially relevant to the Draft Result being investigated, and DiamondIQ transparently identifies which characteristics were used, which were unavailable, and how many historical players satisfy those criteria.
+
+Supporting rules:
+
+- DiamondIQ may not choose comparison criteria because they happen to produce a cohort whose eventual Draft Results resemble the test player's result.
+- Missing characteristics may not be inferred simply to qualify or disqualify a player from a cohort.
+- A valid comparison does not require players to be identical.
+- DiamondIQ must distinguish between required cohort criteria and additional characteristics that may explain differences within the cohort.
+- The comparison population must be large enough to support the strength of the conclusion being made.
+- If filtering produces insufficient historical evidence, DiamondIQ must explicitly identify the evidence as sparse rather than manufacture precision.
+
+### Approval boundaries
+
+The five categories are approved as the top-level validation framework. **Only Category 1 has an approved detailed definition at this time.** Detailed definitions for Categories 2–5 are not approved.
+
+The following are not approved and must not be created or implemented:
+
+- weights;
+- points;
+- thresholds;
+- pass/fail rules;
+- the 85% benchmark calculation;
+- any composite validation score;
+- scoring logic of any kind.
+
+This framework records governance structure and the approved Category 1 definition only. It does not authorize historical testing, validation-population selection or inspection, outcome-based cohort refinement, analytical implementation, or changes to production behavior.
+
 ---
 
 # 2. NON-NEGOTIABLE BUILD RULES
