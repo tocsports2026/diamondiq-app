@@ -1,0 +1,124 @@
+OSM BLIND HISTORICAL VALIDATION TEST #1 — RUN DIAMONDIQ REPORT
+
+Run a DiamondIQ Draft Intelligence analysis for the anonymous athlete profile below.
+
+IMPORTANT VALIDATION CONDITIONS
+
+This is a blind historical validation case.
+
+The athlete's identity and actual Draft Result are intentionally being withheld by OSM.
+
+Do NOT attempt to identify the athlete.
+
+Do NOT search for or infer the athlete's identity from the combination of school, position, rankings, age, physical profile, scouting grades, or summer-league history.
+
+Do NOT attempt to locate the athlete's actual Draft Result.
+
+Do NOT use the athlete's eventual draft round, pick, club, signing status, signing bonus, slot relationship, professional signing, or subsequent career information.
+
+Analyze the athlete exactly as an anonymous DiamondIQ client profile using the production evidence currently available in DiamondIQ.
+
+ATHLETE PROFILE
+
+Class: Junior
+Position: Catcher
+School: Nebraska
+Age: 20.9
+Bats/Throws: R/R
+Height: 5'11"
+Weight: 215 lbs
+
+Rankings:
+- MLB Rank: 173
+- Perfect Game Draft Board Rank: 92
+- Baseball America Draft Rank: 300
+
+Scouting Grades:
+- Hit: 45
+- Power: 50
+- Run: 40
+- Arm: 55
+- Field: 45
+- Overall: 40
+
+Summer-league history:
+- Played in Coastal Plain League
+- Played in Northwoods League
+- Did not play in Cape Cod League
+
+EVIDENCE RULES
+
+Use ONLY production DiamondIQ evidence.
+
+Use verified historical evidence and the approved evidence/provenance architecture.
+
+Do not use general/model baseball knowledge to fill gaps.
+
+Do not infer missing athlete attributes.
+
+Do not fabricate statistics, rankings, evaluations, signing information, or comparisons.
+
+Missing evidence must remain missing.
+
+Do not require comparison players to be identical.
+
+Distinguish:
+- required cohort criteria,
+- useful differentiating characteristics,
+- unavailable characteristics.
+
+Do not narrow cohorts until only players producing a convenient Draft Result remain.
+
+If a cohort becomes too small to support a meaningful conclusion, explicitly say so and broaden or qualify the analysis rather than manufacturing precision.
+
+REPORT
+
+Generate the DiamondIQ Draft Intelligence Report that this athlete would receive based on the evidence currently available.
+
+The report should address:
+
+1. Athlete profile and evidence inventory
+2. Ranking context and disagreement among available rankings
+3. Relevant historical comparison populations
+4. Draft Results experienced by those populations
+5. Catcher-specific historical evidence available in DiamondIQ
+6. Age/class/eligibility context supported by the data
+7. Physical/profile and scouting-grade context where historical evidence supports comparison
+8. Summer-league evidence and whether the available data supports any meaningful distinction between:
+   - Cape participation
+   - Northwoods participation
+   - Coastal Plain participation
+   - no documented elite summer-league participation
+9. Factors historically associated with materially different Draft Results among relevant comparisons
+10. Evidence-supported market assessment
+11. Opportunities
+12. Risks
+13. Leverage/decision environment
+14. Areas where DiamondIQ lacks sufficient evidence
+15. Overall DiamondIQ assessment
+
+DRAFT RESULT
+
+Use “Draft Result” as the comprehensive concept approved in the DiamondIQ methodology.
+
+Do not reduce the analysis solely to predicted draft position.
+
+Where production evidence supports it, evaluate historical results involving selection, selection range, signing behavior/economics, bonus/slot relationship, signing status, and amateur-pathway outcomes.
+
+Do not manufacture components that the database cannot support.
+
+VALIDATION FREEZE
+
+Once the report is generated:
+
+- Save/freeze the exact report as Blind Historical Validation Test #1.
+- Record the production data version/evidence state used.
+- Record the retrieval/cohort criteria used.
+- Record all material source counts.
+- Do not revise the report after OSM reveals the athlete.
+- Do not tune methodology based on this athlete.
+- Do not inspect or search for his identity or actual Draft Result.
+
+Return the complete frozen DiamondIQ report and its evidence/provenance summary.
+
+Then STOP for OSM review and athlete reveal.

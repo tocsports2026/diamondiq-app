@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "rtzDqsAlZAH_s5nH-aeXm"
+uri = "file://docs/validation/BLIND_HISTORICAL_VALIDATION_TEST_1.json"
+type = "unspecified"
+title = "Blind Historical Validation Test #1 — Frozen Report"
+description = "Exact frozen DiamondIQ production retrieval output, anonymous profile, cohort criteria, material counts, source versions, and evidence/provenance state."
+logical_id = "ef6ae939-8ee4-4343-8b8b-e39262ddae7f"
+content_hash = "sha256:9d5c2f868c96e36b9b9b6ae5bb8e4043d0b71ad6230ec718abd4a20476c04b30"
+size = 4971247
+mtime_ms = 1788280002785
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:69ab8d0e-2379-4b85-8569-9b3287ff4506/ef6ae939-8ee4-4343-8b8b-e39262ddae7f/6d81add6-ea4e-4d69-93e2-d436a15b31e1"
+storage_version_token = "1788280053045232"
+content_type = "application/octet-stream"
