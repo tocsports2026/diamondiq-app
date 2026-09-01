@@ -3,8 +3,29 @@ import bcrypt from "bcryptjs";
 import { requireAdmin, requireStaff } from "../middleware/auth";
 import { query, queryOne } from "../db";
 import { mapAthlete } from "./auth";
+import { retrieveAnonymousDraftProfile } from "../evidence/anonymousDraftRetrieval";
 
 const router = Router();
+
+// POST /api/admin/validation/anonymous-draft-retrieval
+// Validation-only path: aggregate reads, no athlete association, no persistence.
+router.post("/validation/anonymous-draft-retrieval", requireAdmin, async (req, res) => {
+  try {
+    const result = await retrieveAnonymousDraftProfile(req.body);
+    return res.json({ ok: true, data: result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid anonymous profile";
+    if (
+      message.includes("must be") ||
+      message.includes("Unsupported") ||
+      message.includes("values")
+    ) {
+      return res.status(400).json({ ok: false, error: message });
+    }
+    console.error(err);
+    return res.status(500).json({ ok: false, error: "Anonymous retrieval failed" });
+  }
+});
 
 // GET /api/admin/dashboard
 router.get("/dashboard", requireStaff, async (_req, res) => {

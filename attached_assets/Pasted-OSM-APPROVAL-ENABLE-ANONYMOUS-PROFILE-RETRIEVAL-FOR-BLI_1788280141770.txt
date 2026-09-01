@@ -1,0 +1,138 @@
+OSM APPROVAL — ENABLE ANONYMOUS PROFILE RETRIEVAL FOR BLIND VALIDATION
+
+Blind Historical Validation Test #1 exposed a retrieval limitation before the athlete's identity or Draft Result was revealed.
+
+DO NOT inspect, search for, or attempt to identify the anonymous athlete.
+DO NOT inspect or search for his eventual Draft Result.
+
+The frozen Test #1 report must remain unchanged.
+
+FINDING
+
+The current production Draft retrieval interface used only:
+
+- Position = C
+
+It could not apply the other supplied athlete characteristics even though DiamondIQ contains substantially richer historical evidence.
+
+This means the frozen report is a valid baseline retrieval/system test, but it is not yet a valid test of DiamondIQ's intended athlete-profile analysis.
+
+PURPOSE
+
+Create a validation-safe anonymous profile retrieval path that allows DiamondIQ to query existing production evidence using documented athlete characteristics WITHOUT:
+
+- attaching the profile to a canonical athlete;
+- identifying the athlete;
+- fuzzy matching the profile to a real player;
+- accessing the anonymous athlete's eventual Draft Result;
+- changing underlying source evidence;
+- creating predictive or similarity scores.
+
+SUPPORTED PROFILE INPUTS
+
+The anonymous retrieval path should be capable of using, when production evidence actually supports the field:
+
+- Position
+- Class / eligibility
+- Age
+- Height
+- Weight
+- Bats
+- Throws
+- School / school type or level only where legitimately useful
+- MLB ranking
+- Perfect Game ranking
+- Baseball America ranking
+- Scouting grades
+- Historical summer-league participation
+- Relevant player performance/evaluation evidence already stored in DiamondIQ
+
+IMPORTANT
+
+Do not assume every field can currently be compared historically.
+
+For each supplied attribute, determine:
+
+1. whether corresponding historical production evidence exists;
+2. coverage/count of that evidence;
+3. whether it can be used directly without reinterpretation;
+4. whether it is suitable as:
+   - required cohort criterion,
+   - secondary/differentiating factor,
+   - descriptive context only,
+   - or unavailable for historical comparison.
+
+MISSING DATA
+
+Missing historical attributes must remain missing.
+
+Do not treat absence of data as a negative attribute.
+
+Do not infer rankings, grades, measurements, summer participation, or eligibility.
+
+COHORT CONSTRUCTION
+
+Do not create an opaque similarity score.
+
+Use transparent factual cohort construction.
+
+The system must be able to report:
+
+- base population;
+- each applied filter;
+- population remaining after each filter where appropriate;
+- attributes used as required criteria;
+- attributes used only as differentiating context;
+- unavailable attributes;
+- resulting historical Draft Result distributions.
+
+Avoid over-filtering.
+
+If exact multi-variable filtering produces an inadequately small population, broaden transparently and analyze nested or parallel cohorts rather than manufacturing precision.
+
+VALIDATION SAFETY
+
+The anonymous athlete profile must exist only as validation input.
+
+It must not be identity-matched against draft_players.
+
+It must not query the athlete's own future outcome.
+
+The athlete's actual identity and Draft Result remain unknown to DiamondIQ.
+
+IMPLEMENTATION BOUNDARY
+
+This work is intended to expose EXISTING production evidence to the approved DiamondIQ analysis.
+
+Do NOT:
+
+- add new baseball data;
+- alter source values;
+- reinterpret provider statistics;
+- change canonical identities;
+- generate new historical facts;
+- implement prediction probabilities;
+- implement similarity scoring;
+- tune filters based on this athlete's eventual outcome;
+- inspect his outcome;
+- change the frozen Test #1 result.
+
+AFTER IMPLEMENTATION
+
+Do NOT rerun the anonymous athlete yet.
+
+First report:
+
+1. Which supplied profile fields can now be queried.
+2. Historical coverage for each field.
+3. Which fields cannot currently be supported.
+4. Which fields you recommend as required cohort criteria versus differentiating/context variables, based strictly on data coverage and structure.
+5. How nested/parallel cohorts will prevent over-filtering.
+6. Exact anonymous-profile isolation mechanism.
+7. Exact mechanism preventing identity lookup and Draft Result leakage.
+8. Confirmation production evidence changed = 0.
+9. Confirmation canonical identities changed = 0.
+10. Confirmation no outcome inspection occurred.
+11. Confirmation frozen Test #1 remains unchanged.
+
+Then STOP for OSM review.
