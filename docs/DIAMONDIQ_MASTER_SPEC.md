@@ -55,6 +55,41 @@ DiamondIQ helps the athlete:
 
 ---
 
+# 1.1 FORMALLY APPROVED METHODOLOGY & VALIDATION OBJECTIVES
+
+**Status: OSM-approved and locked.**
+
+## Product objective
+
+DiamondIQ's objective is to use verified historical and contemporaneously available evidence to determine where an athlete's documented profile and draft situation fit within relevant historical player populations; identify the Draft Results experienced by genuinely comparable players and the factors associated with materially different Draft Results; and provide OSM and its clients with an evidence-supported assessment of the athlete's market, opportunities, risks, leverage, and decision environment without presenting uncertainty as fact.
+
+## Validation objective
+
+Determine whether DiamondIQ, using only information that was available at the historical point of assessment, identifies appropriate comparison populations and meaningful differentiating factors and produces an evidence-supported assessment that is consistent with subsequently observed Draft Results.
+
+## Definitional note: Draft Result
+
+“Draft Result” is intentionally the comprehensive term. It must not be reduced solely to draft position, round, or drafted/undrafted status.
+
+The detailed components and scoring rules for Draft Result have **not** yet been approved. Do not create them, infer them, or implement a scoring model yet.
+
+## Methodology lock
+
+Until OSM separately approves the detailed Draft Result components and scoring rules:
+
+- do not alter report-generation logic;
+- do not alter retrieval logic;
+- do not alter cohort logic;
+- do not implement validation scoring;
+- do not run historical tests;
+- do not inspect outcomes for the purpose of choosing methodology;
+- do not generate new DiamondIQ inferences;
+- do not modify production evidence.
+
+This lock records product and validation objectives only. It does not authorize analytical implementation, retrospective testing, scoring, or changes to production behavior.
+
+---
+
 # 2. NON-NEGOTIABLE BUILD RULES
 
 ## 2.1 Official branding only
