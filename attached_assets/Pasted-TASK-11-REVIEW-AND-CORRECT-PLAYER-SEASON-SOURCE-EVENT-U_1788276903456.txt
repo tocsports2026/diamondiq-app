@@ -1,0 +1,148 @@
+TASK #11 — REVIEW AND CORRECT PLAYER-SEASON SOURCE-EVENT UNIQUENESS
+
+Job #10 remains uncommitted after a complete transactional rollback.
+
+The commit failed because the current player_season_statistics uniqueness constraint:
+
+UNIQUE (
+  source_file_version_id,
+  source_worksheet,
+  source_excel_row,
+  statistic_type
+)
+
+does not uniquely identify source events within Supplemental Evidence Batch 1.
+
+DO NOT retry Job #10 yet.
+
+DO NOT simply remove the uniqueness constraint.
+
+DO NOT change source data, mappings, identity matching, statistics, or provenance.
+
+OBJECTIVE
+
+Determine the minimum safe schema correction that allows legitimate independent source observations to coexist while still preventing actual duplicate source events.
+
+STEP 1 — DIAGNOSE THE COLLISIONS
+
+Using the existing Job #10 dry-run plan, identify ALL proposed player_season_statistics rows that collide under the current uniqueness constraint.
+
+Report:
+
+1. Total proposed rows involved in uniqueness collisions.
+2. Number of distinct conflicting uniqueness keys.
+3. Breakdown by provider/source.
+4. Breakdown by worksheet.
+5. For each collision pattern, identify what distinguishes the legitimate source observations.
+
+Specifically inspect whether the distinguishing source context includes fields such as:
+- provider
+- original source file
+- original source worksheet
+- source season
+- league
+- source player ID
+- source row
+- source URL
+- batting vs pitching context
+- another source-context field already preserved in the compiled workbook
+
+Do not infer distinctions that are not documented.
+
+STEP 2 — DETERMINE THE TRUE SOURCE-EVENT KEY
+
+Define what constitutes one unique player-season statistical source observation.
+
+The key must:
+
+- distinguish independent provider/source observations;
+- distinguish seasons;
+- distinguish batting and pitching observations where applicable;
+- allow the same athlete to have multiple legitimate observations;
+- prevent the same exact source event from being inserted twice;
+- remain deterministic;
+- use only source-supported fields;
+- not depend on fuzzy player identity matching;
+- not depend on a canonical draft_players identity;
+- work for unlinked observations;
+- preserve provider-specific evidence independently.
+
+IMPORTANT:
+
+The compiled Batch 1 workbook is itself an ingestion container containing evidence originating from several independent files/providers.
+
+Therefore source_file_version_id = 10 identifies the compiled ingestion workbook, but may NOT by itself represent the original evidence-source namespace.
+
+The uniqueness design must account for original source context where necessary.
+
+STEP 3 — REVIEW OTHER NEW TABLES
+
+Before changing anything, audit the uniqueness/index design for:
+
+- player_evaluation_observations
+- historical_rankings as used by Batch 1
+- source_player_identity_links
+- record_source_assertions associated with Batch 1
+
+Determine whether the same compiled-workbook/source-coordinate issue could cause a later collision in any of them.
+
+Do not wait for another failed transaction if the same structural problem is already detectable.
+
+STEP 4 — PROPOSE THE MINIMUM SCHEMA CHANGE
+
+Report the exact existing constraint/index that should change and the exact proposed replacement.
+
+Prefer a deterministic source-event identity architecture rather than increasingly large ad hoc UNIQUE constraints if that is safer.
+
+If a source_event_key or source_event_id is appropriate, explain exactly how it is constructed and why two independent observations cannot accidentally receive the same key.
+
+Do not implement yet.
+
+STEP 5 — RECONCILE WITH THE EIGHT CAPE DUPLICATES
+
+The approved Job #10 plan intentionally collapses eight exact Cape duplicate source rows while preserving provenance for both rows.
+
+Confirm that the proposed uniqueness architecture:
+
+- still allows those eight duplicates to collapse into one source event each;
+- retains provenance for both original rows;
+- does not collapse legitimate repeated player-season observations.
+
+STEP 6 — HISTORICAL / FUTURE SAFETY
+
+Explain whether the proposed design will also safely support future supplemental datasets.
+
+We expect additional independent historical evidence sources over time.
+
+The design should not assume:
+- one workbook = one original provider;
+- one worksheet name is globally unique;
+- one Excel row coordinate is globally unique;
+- one athlete has only one observation per season;
+- every observation can be linked to draft_players.
+
+STEP 7 — REPORT ONLY
+
+Return:
+
+A. Root cause.
+B. Complete collision count.
+C. Collision examples.
+D. True distinguishing source fields.
+E. Proposed source-event identity definition.
+F. Exact schema/index change proposed.
+G. Effect on the other Batch 1 destination tables.
+H. Confirmation Cape duplicate handling still works.
+I. Future-ingestion implications.
+J. Existing production records that would be affected by the schema migration.
+K. Whether any data values would change.
+L. Whether Job #10 mappings/counts would change.
+M. Fixture records involved.
+N. Model/general AI baseball knowledge used.
+O. DiamondIQ inferences generated.
+
+DO NOT IMPLEMENT THE CHANGE.
+DO NOT RETRY JOB #10.
+DO NOT COMMIT ANY JOB #10 DATA.
+
+Stop for OSM approval.
