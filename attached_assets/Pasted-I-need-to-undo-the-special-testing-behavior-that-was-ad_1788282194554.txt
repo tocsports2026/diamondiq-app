@@ -1,0 +1,261 @@
+I need to undo the special testing behavior that was added around Blind Test #1.
+
+The current design incorrectly let my VALIDATION PROCEDURE influence DiamondIQ's PRODUCT BEHAVIOR.
+
+My testing process is external to DiamondIQ. I may choose to give DiamondIQ a real historical athlete, omit the athlete's name, omit the draft year, and later compare the generated report to the result I already know.
+
+DiamondIQ itself should NOT know or care that I am doing that.
+
+From the application's perspective, this is simply an anonymous athlete profile submitted for a normal DiamondIQ Draft Report.
+
+Please make the following corrections.
+
+==================================================
+1. REMOVE SPECIAL “BLIND TEST” REPORT BEHAVIOR
+==================================================
+
+The athlete-report engine should NOT switch into a special:
+
+- historical validation mode
+- blind validation mode
+- current-evidence validation mode
+- year-agnostic validation mode
+- never-previously-drafted validation mode
+
+when I am testing.
+
+Those concepts may remain in separate internal validation/audit documentation if useful, but they must NOT control the normal athlete-report methodology.
+
+The normal report engine should simply receive the facts supplied about the athlete and generate the strongest evidence-supported DiamondIQ Draft Report it can.
+
+Do not require:
+- assessmentDate
+- historicalDraftYearThrough
+- known draft year
+- known athlete identity
+- known eventual Draft Result
+
+to generate a report.
+
+==================================================
+2. PRESERVE ANONYMOUS INPUT WITHOUT CRIPPLING THE REPORT
+==================================================
+
+DiamondIQ must support an athlete profile with no name.
+
+An anonymous report request must NOT cause the system to:
+
+- refuse to generate comparables,
+- suppress historical player names,
+- suppress historical Draft Results,
+- suppress valuation analysis,
+- or fall back to aggregate-only retrieval.
+
+The INPUT athlete remains anonymous.
+
+Historical comparison players may and should be identified by name when supported.
+
+The system must never attempt to identify the anonymous athlete from the supplied facts.
+
+==================================================
+3. NORMAL REPORT OUTPUT MUST BE ATHLETE-FACING
+==================================================
+
+The primary output should be the same report an OSM athlete/client would receive.
+
+It should NOT be a 2,000+ line validation JSON dump.
+
+Keep detailed retrieval, provenance, cohort calculations, and diagnostics in a separate INTERNAL AUDIT OBJECT.
+
+The athlete-facing report should attempt to include:
+
+1. Executive Assessment
+2. Estimated Draft Result Range
+3. Estimated Valuation / Signing Range
+4. Historical Comparable Players
+5. Comparable Draft Result Distribution
+6. Factors Supporting Stronger Outcomes
+7. Factors Associated With Weaker Outcomes
+8. Market Opportunities
+9. Market Risks
+10. Leverage / Decision Environment
+11. Evidence Gaps
+12. Confidence / Strength of Evidence
+13. Sources / Provenance summary
+
+If a section truly cannot be supported, state why.
+
+Do not omit the entire analytical result merely because one evidence category is incomplete.
+
+==================================================
+4. REMOVE EXACT-FILTER INTERSECTION AS THE CORE COMP MODEL
+==================================================
+
+The current behavior:
+
+Catcher
+→ Junior
+→ exact height
+→ exact weight
+→ exact handedness
+→ exact school
+→ exact MLB rank
+→ zero records
+
+is NOT an acceptable comparison methodology.
+
+Do not use one sequential exact-filter chain as the primary way of determining comparable players.
+
+Different variables require different treatment.
+
+Position and relevant eligibility/class may establish the broad population.
+
+Continuous variables such as:
+- age
+- height
+- weight
+
+must be compared using proximity/ranges, not exact equality.
+
+Rankings must not require exact equality.
+
+Example:
+MLB Rank 173 should NOT mean “find historical MLB Rank 173.”
+
+Use appropriate rank neighborhoods/bands and evaluate ranking context.
+
+School should generally be contextual, not a hard exclusion criterion.
+
+Handedness may differentiate comps but should not automatically eliminate otherwise useful comparisons unless baseball context makes it materially necessary.
+
+==================================================
+5. KEEP THE AGE IMPROVEMENT
+==================================================
+
+Do NOT revert the age correction.
+
+Age 20.9 should continue to be treated as a continuous variable with transparent proximity bands rather than exact equality.
+
+The existing ±0.5 and ±1.0 behavior may remain for now pending methodology review.
+
+==================================================
+6. AUDIT THE MLB SCOUTING GRADES BEFORE ANOTHER REPORT
+==================================================
+
+Do not accept the prior report's statement that historical MLB 20–80 grades are unavailable without auditing the source data.
+
+The comprehensive historical database I uploaded contains MLB scouting information for ranked drafted and undrafted prospects, particularly from approximately 2021–2025.
+
+Audit the original source files and production schema for:
+
+- Hit
+- Power
+- Run
+- Arm
+- Field
+- Overall
+
+20–80 scouting grades.
+
+Report:
+
+A. exact source worksheet/columns where these fields exist
+B. seasons/years covered
+C. number of players with each grade populated
+D. whether drafted and undrafted-ranked players are included
+E. whether these values were ingested
+F. which production table/columns contain them, if any
+G. whether they can currently be linked to Draft Results
+H. if they were omitted during ingestion, exactly why
+
+Do NOT modify source values or fabricate mappings.
+
+==================================================
+7. AUDIT RANKING LINKAGE
+==================================================
+
+Audit why DiamondIQ currently has:
+
+- MLB rankings
+- Perfect Game rankings
+- Baseball America rankings
+
+but cannot use PG and BA rankings meaningfully in athlete-to-outcome comparisons.
+
+Determine whether safe identity relationships already exist or can be created from source-supported evidence.
+
+Do not fuzzy-match ambiguous identities.
+
+The eventual report engine should be able to analyze things such as:
+
+- approximate rank position
+- rank bands
+- consensus across sources
+- disagreement across sources
+- magnitude of ranking dispersion
+
+without requiring exact rank matches.
+
+==================================================
+8. HISTORICAL COMPARABLE PLAYERS MUST BE ALLOWED
+==================================================
+
+Remove the rule that prevents the report engine from returning historical player names.
+
+The restriction should only be:
+
+DO NOT identify or search for the anonymous INPUT athlete.
+
+The report SHOULD be able to return named historical comparable players and their supported historical evidence.
+
+For each comparable, DiamondIQ should eventually be able to show:
+
+- name
+- why selected
+- similarities
+- differences
+- class/eligibility
+- position
+- age/physical profile
+- rankings
+- scouting profile where available
+- relevant performance/context
+- actual Draft Result
+- signing bonus/value where supported
+
+==================================================
+9. DO NOT CREATE A BLACK-BOX SIMILARITY SCORE YET
+==================================================
+
+Do not implement an opaque AI similarity score.
+
+Before implementing a new comparison algorithm, return the proposed methodology for approval.
+
+Any eventual weighting/distance approach must be transparent and auditable.
+
+It must be possible to see which variables influenced a comparison and by how much.
+
+==================================================
+10. DO NOT RERUN THE ATHLETE YET
+==================================================
+
+Do not rerun the current anonymous athlete report yet.
+
+First return an audit describing:
+
+1. what special validation-mode code currently affects report generation
+2. what should be removed or isolated from the normal report engine
+3. how anonymous athlete reports will function after correction
+4. the MLB scouting-grade audit
+5. the ranking-linkage audit
+6. how named historical comparables can safely be returned
+7. what code/schema changes you recommend
+8. what parts of the existing validation/provenance infrastructure can remain as internal audit tooling
+
+Do not modify production evidence.
+
+Do not identify the anonymous athlete.
+
+Do not search for his eventual outcome.
+
+Do not rerun his report until I approve the correction plan.
