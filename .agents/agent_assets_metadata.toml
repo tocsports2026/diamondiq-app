@@ -28,3 +28,17 @@ mtime_ms = 1788281284769
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:69ab8d0e-2379-4b85-8569-9b3287ff4506/f6233dfe-d5fb-4330-8010-a85e4a476fb1/ad0ed125-08fc-4259-9bb7-7800b12353dc"
 storage_version_token = "1788281318172402"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "rODyt11gG2-FoK_mR7A-s"
+uri = "file://docs/validation/BLIND_HISTORICAL_VALIDATION_TEST_1_CURRENT_EVIDENCE_YEAR_AGNOSTIC_AGE_BAND_ADJUSTED_REPORT.json"
+type = "unspecified"
+title = "Blind Test #1 — Age-Band Adjusted Report"
+description = "Frozen current-evidence, year-agnostic anonymous DiamondIQ report using fixed ±0.5 and ±1.0 age bands against historical age at draft."
+logical_id = "de13632e-c00a-42e1-aba7-f7d01264fe8f"
+content_hash = "sha256:521b86b32831c20634c4ca3f9247014cc32a88bbe85d0b570de3683e5e2f7cf0"
+size = 91573
+mtime_ms = 1788281460325
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:69ab8d0e-2379-4b85-8569-9b3287ff4506/de13632e-c00a-42e1-aba7-f7d01264fe8f/6d3786bd-cb63-4d14-8a74-07582df0924d"
+storage_version_token = "1788281478840051"
+content_type = "application/octet-stream"

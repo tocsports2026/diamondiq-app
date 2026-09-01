@@ -55,6 +55,16 @@ interface CohortSummary {
   };
 }
 
+interface AgeBandCohort {
+  band: "within_plus_or_minus_0_5_years" | "within_plus_or_minus_1_0_years";
+  targetAge: number;
+  lowerBound: number;
+  upperBound: number;
+  historicalField: "age_at_draft";
+  comparisonBasis: "approximate_current_profile_age_to_historical_age_at_draft";
+  summary: CohortSummary;
+}
+
 const ALLOWED_PROFILE_KEYS = new Set([
   "position",
   "class",
@@ -418,9 +428,14 @@ async function evidenceCoverage(profile: AnonymousDraftProfileInput) {
     },
     age: {
       historicalEvidenceRows: numberValue(row.age_at_draft),
-      directOutcomeCohortSupport: Boolean(profile.ageAtDraft !== undefined),
-      recommendedUse: profile.ageAtDraft !== undefined ? "secondary_differentiating_factor" : "descriptive_context_only",
-      note: "Assessment age is not silently treated as age at draft.",
+      directOutcomeCohortSupport: Boolean(
+        profile.age !== undefined || profile.ageAtDraft !== undefined
+      ),
+      recommendedUse:
+        profile.age !== undefined || profile.ageAtDraft !== undefined
+          ? "secondary_differentiating_factor"
+          : "descriptive_context_only",
+      note: "Age uses transparent ±0.5 and ±1.0 bands against historical age_at_draft. Current/profile age is approximate unless a draft-date relationship is explicitly known.",
     },
     height: {
       historicalEvidenceRows: numberValue(row.height_in),
@@ -556,17 +571,6 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
       rationale: "Only explicit source-preserved class codes are accepted.",
     });
   }
-  if (profile.ageAtDraft !== undefined) {
-    pushFilter(filters, {
-      id: "age_at_draft",
-      label: `Age at draft = ${profile.ageAtDraft}`,
-      field: "age_at_draft",
-      sql: "dp.age_at_draft = $?",
-      values: [profile.ageAtDraft],
-      recommendedUse: "secondary_criterion",
-      rationale: "Uses the stored age-at-draft field only when that basis is explicitly supplied.",
-    });
-  }
   if (profile.heightIn !== undefined) {
     pushFilter(filters, {
       id: "height_in",
@@ -687,6 +691,52 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
     });
   }
 
+  const ageBandCohorts: AgeBandCohort[] = [];
+  const targetAge = profile.age ?? profile.ageAtDraft;
+  if (targetAge !== undefined) {
+    const positionFilter = filters.find((filter) => filter.id === "position");
+    for (const band of [
+      {
+        id: "within_plus_or_minus_0_5_years" as const,
+        tolerance: 0.5,
+      },
+      {
+        id: "within_plus_or_minus_1_0_years" as const,
+        tolerance: 1.0,
+      },
+    ]) {
+      const lowerBound = targetAge - band.tolerance;
+      const upperBound = targetAge + band.tolerance;
+      const ageFilter: SqlFilter = {
+        id: band.id,
+        label: `Age within ±${band.tolerance.toFixed(1)} years of ${targetAge}`,
+        field: "age_at_draft",
+        sql: "dp.age_at_draft >= $? AND dp.age_at_draft <= $?",
+        values: [lowerBound, upperBound],
+        recommendedUse: "secondary_criterion",
+        rationale:
+          "Transparent fixed-width age band against historical age_at_draft; tolerance is not outcome-selected.",
+      };
+      const ageFilters = positionFilter
+        ? [positionFilter, ageFilter]
+        : [ageFilter];
+      const compiled = compileFilters(ageFilters);
+      ageBandCohorts.push({
+        band: band.id,
+        targetAge,
+        lowerBound,
+        upperBound,
+        historicalField: "age_at_draft",
+        comparisonBasis:
+          "approximate_current_profile_age_to_historical_age_at_draft",
+        summary: await summarizeCohort(
+          [...BASE_CONDITIONS, ...compiled.sql],
+          compiled.params
+        ),
+      });
+    }
+  }
+
   const summerParallelCohorts: Array<{ league: string; state: string; summary: CohortSummary | null }> = [];
   for (const [league, state] of Object.entries(profile.summerLeagueParticipation || {})) {
     if (state !== "played") {
@@ -747,12 +797,13 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
       exactFilteredPopulation: exact,
       nestedCohorts,
       parallelCohorts,
+      ageBandCohorts,
       summerParallelCohorts,
       overFilteringProtection: {
         hiddenBroadening: false,
         hiddenNarrowingByOutcome: false,
         opaqueSimilarityScore: false,
-        rule: "The path returns base, nested, and parallel factual populations. It never silently broadens or narrows a cohort based on Draft Results.",
+        rule: "The path returns base, nested, parallel, and fixed age-band factual populations. It never silently broadens or narrows a cohort based on Draft Results.",
       },
     },
     evidenceRules: {
