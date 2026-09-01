@@ -32,8 +32,6 @@ export interface AnonymousDraftProfileInput {
 
 export interface AnonymousDraftRetrievalRequest {
   profile: AnonymousDraftProfileInput;
-  historicalDraftYearThrough: number;
-  assessmentDate: string;
 }
 
 interface SqlFilter {
@@ -77,8 +75,6 @@ const ALLOWED_PROFILE_KEYS = new Set([
 
 const ALLOWED_REQUEST_KEYS = new Set([
   "profile",
-  "historicalDraftYearThrough",
-  "assessmentDate",
 ]);
 const ALLOWED_RANKING_KEYS = new Set(["mlb", "perfectGame", "baseballAmerica"]);
 const ALLOWED_SUMMER_STATES = new Set(["played", "did_not_play", "unknown"]);
@@ -168,33 +164,8 @@ function validateRequest(input: unknown): AnonymousDraftRetrievalRequest {
       throw new Error(`Unsupported anonymous retrieval request field: ${key}`);
     }
   }
-  const historicalDraftYearThrough = validateFiniteNumber(
-    request.historicalDraftYearThrough,
-    "historicalDraftYearThrough"
-  );
-  if (
-    !Number.isInteger(historicalDraftYearThrough) ||
-    historicalDraftYearThrough < 1900 ||
-    historicalDraftYearThrough > 2100
-  ) {
-    throw new Error("historicalDraftYearThrough must be a four-digit year");
-  }
-  if (
-    typeof request.assessmentDate !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(request.assessmentDate)
-  ) {
-    throw new Error("assessmentDate must use YYYY-MM-DD format");
-  }
-  const assessmentYear = Number(request.assessmentDate.slice(0, 4));
-  if (historicalDraftYearThrough >= assessmentYear) {
-    throw new Error(
-      "historicalDraftYearThrough must be earlier than the assessment year"
-    );
-  }
   return {
     profile: validateProfile(request.profile),
-    historicalDraftYearThrough,
-    assessmentDate: request.assessmentDate,
   };
 }
 
@@ -285,11 +256,35 @@ async function summarizeCohort(
   );
 
   const outcomes = await query<{ outcome: string; records: string }>(
-    `SELECT COALESCE(dp.outcome_group, 'Unavailable / source outcome missing') AS outcome,
+    `SELECT CASE
+              WHEN dp.outcome_group = 'Drafted'
+                THEN 'Drafted'
+              WHEN dp.outcome_group = 'Undrafted / NDFA'
+                OR dp.ndfa_match_status IN (
+                  'Exact normalized name match',
+                  'Exact normalized player-name match'
+                )
+                OR dp.signed = TRUE
+                OR dp.signing_date IS NOT NULL
+                OR dp.bonus_reported IS NOT NULL
+                OR NULLIF(TRIM(dp.mlb_org), '') IS NOT NULL
+                THEN 'Undrafted / signed as free agent'
+              WHEN dp.school_type = 'HS'
+                OR UPPER(TRIM(COALESCE(dp.player_class, ''))) LIKE 'HS %'
+                OR UPPER(TRIM(COALESCE(dp.player_class, ''))) IN (
+                  '4YR SO',
+                  '4YR JR',
+                  'JC J1',
+                  'JC J2',
+                  'JC J3'
+                )
+                THEN 'Undrafted / continued amateur pathway'
+              ELSE 'Undrafted / no professional signing found'
+            END AS outcome,
             COUNT(*) AS records
      FROM draft_players dp
      WHERE ${where}
-     GROUP BY dp.outcome_group
+     GROUP BY outcome
      ORDER BY outcome`,
     params
   );
@@ -316,10 +311,7 @@ async function summarizeCohort(
   };
 }
 
-async function evidenceCoverage(
-  profile: AnonymousDraftProfileInput,
-  historicalDraftYearThrough: number
-) {
+async function evidenceCoverage(profile: AnonymousDraftProfileInput) {
   const draftRows = await query<{
     total: string;
     position: string;
@@ -347,28 +339,22 @@ async function evidenceCoverage(
        COUNT(*) FILTER (WHERE dp.mlb_rank IS NOT NULL) AS mlb_rank
      FROM draft_players dp
      WHERE dp.is_fixture = FALSE
-       AND dp.outcome_group IN ('Drafted', 'Undrafted / NDFA', 'Undrafted')
-       AND dp.draft_year <= $1`,
-    [historicalDraftYearThrough]
+        AND dp.outcome_group IN ('Drafted', 'Undrafted / NDFA', 'Undrafted')`
   );
   const rankingRows = await query<{ ranking_source: string; records: string }>(
     `SELECT COALESCE(ranking_source, 'Unavailable') AS ranking_source, COUNT(*) AS records
      FROM historical_rankings
      WHERE is_fixture = FALSE
-       AND ranking_year <= $1
      GROUP BY ranking_source
-     ORDER BY ranking_source`,
-    [historicalDraftYearThrough]
+     ORDER BY ranking_source`
   );
   const metricRows = await query<{ metric: string; records: string }>(
     `SELECT metric, COUNT(*) AS records
      FROM player_evaluation_observations e
      CROSS JOIN LATERAL jsonb_object_keys(COALESCE(e.metrics, '{}'::jsonb)) AS metric
      WHERE e.is_fixture = FALSE
-       AND e.class_year <= $1
      GROUP BY metric
-     ORDER BY metric`,
-    [historicalDraftYearThrough]
+     ORDER BY metric`
   );
   const evaluationRows = await query<{
     total: string;
@@ -377,9 +363,7 @@ async function evidenceCoverage(
     `SELECT COUNT(*) AS total,
             COUNT(*) FILTER (WHERE e.metrics <> '{}'::jsonb) AS with_metrics
      FROM player_evaluation_observations e
-     WHERE e.is_fixture = FALSE
-       AND e.class_year <= $1`,
-    [historicalDraftYearThrough]
+     WHERE e.is_fixture = FALSE`
   );
   const leagueRows = await query<{
     league: string;
@@ -395,10 +379,13 @@ async function evidenceCoverage(
       AND l.source_observation_id = s.id
       AND l.link_status = 'deterministic_link'
      WHERE s.is_fixture = FALSE
-       AND s.season_year <= $1
      GROUP BY s.league
-     ORDER BY league`,
-    [historicalDraftYearThrough]
+     ORDER BY league`
+  );
+  const slotValueRows = await query<{ records: string }>(
+    `SELECT COUNT(*) AS records
+     FROM slot_values
+     WHERE is_fixture = FALSE`
   );
 
   const row = draftRows[0] || {
@@ -527,6 +514,11 @@ async function evidenceCoverage(
       metric: item.metric,
       records: numberValue(item.records),
     })),
+    slotValueCoverage: {
+      records: numberValue(slotValueRows[0]?.records || 0),
+      directAnonymousCohortSupport: false,
+      note: "Slot values are available as production evidence but are not attached to anonymous profile cohorts without a supported pick/round relationship.",
+    },
     summerLeagueCoverage: leagueRows.map((item) => ({
       league: item.league,
       statisticRows: numberValue(item.statistic_rows),
@@ -539,15 +531,6 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
   const request = validateRequest(input);
   const profile = request.profile;
   const filters: SqlFilter[] = [];
-  const cutoffFilter: SqlFilter = {
-    id: "historical_draft_year_cutoff",
-    label: `Historical draft year through ${request.historicalDraftYearThrough}`,
-    field: "draft_year",
-    sql: "dp.draft_year <= $?",
-    values: [request.historicalDraftYearThrough],
-    recommendedUse: "required_cohort_criterion",
-    rationale: "Mandatory validation safety boundary excluding later Draft Results.",
-  };
 
   if (profile.position) {
     const position = positionExpression(profile.position);
@@ -663,12 +646,9 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
   }
 
   const coverage = await evidenceCoverage(
-    profile,
-    request.historicalDraftYearThrough
+    profile
   );
-  const baseCompiled = compileFilters([cutoffFilter]);
-  const baseConditions = [...BASE_CONDITIONS, ...baseCompiled.sql];
-  const base = await summarizeCohort(baseConditions, baseCompiled.params);
+  const base = await summarizeCohort(BASE_CONDITIONS, []);
   const nestedCohorts: Array<{
     afterFilter: string;
     appliedFilters: string[];
@@ -676,10 +656,7 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
   }> = [];
 
   for (let index = 0; index < filters.length; index += 1) {
-    const compiled = compileFilters([
-      cutoffFilter,
-      ...filters.slice(0, index + 1),
-    ]);
+    const compiled = compileFilters(filters.slice(0, index + 1));
     nestedCohorts.push({
       afterFilter: filters[index].label,
       appliedFilters: filters.slice(0, index + 1).map((filter) => filter.label),
@@ -690,7 +667,7 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
     });
   }
 
-  const exactCompiled = compileFilters([cutoffFilter, ...filters]);
+  const exactCompiled = compileFilters(filters);
   const exact = await summarizeCohort(
     [...BASE_CONDITIONS, ...exactCompiled.sql],
     exactCompiled.params
@@ -700,7 +677,7 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
     summary: CohortSummary;
   }> = [];
   for (const filter of filters) {
-    const compiled = compileFilters([cutoffFilter, filter]);
+    const compiled = compileFilters([filter]);
     parallelCohorts.push({
       filter: filter.label,
       summary: await summarizeCohort(
@@ -716,14 +693,13 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
       summerParallelCohorts.push({ league, state, summary: null });
       continue;
     }
-    const summerParams = [request.historicalDraftYearThrough, league];
+    const summerParams = [league];
     summerParallelCohorts.push({
       league,
       state,
       summary: await summarizeCohort(
         [
           ...BASE_CONDITIONS,
-          "dp.draft_year <= $1",
           `dp.id IN (
              SELECT l.candidate_draft_player_id
              FROM source_player_identity_links l
@@ -732,8 +708,7 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
               AND l.source_observation_id = s.id
              WHERE l.link_status = 'deterministic_link'
                AND s.is_fixture = FALSE
-               AND s.season_year <= $1
-               AND LOWER(TRIM(s.league)) = LOWER(TRIM($2))
+                AND LOWER(TRIM(s.league)) = LOWER(TRIM($1))
            )`,
         ],
         summerParams
@@ -744,11 +719,10 @@ export async function retrieveAnonymousDraftProfile(input: unknown) {
   return {
     validationOnly: true,
     persisted: false,
-    evidenceCutoff: {
-      historicalDraftYearThrough: request.historicalDraftYearThrough,
-      assessmentDate: request.assessmentDate,
-      rule: "The cutoff must precede the assessment year, and every returned Draft Result aggregate excludes later draft years.",
-    },
+    validationMode:
+      "CURRENT-EVIDENCE / YEAR-AGNOSTIC / ANONYMOUS / NEVER-PREVIOUSLY-DRAFTED",
+    historicalEvidenceBasis:
+      "Current non-fixture production evidence is used as the comparison library; no athlete draft year or assessment date is requested, inferred, or applied.",
     anonymousProfile: profile,
     isolation: {
       canonicalAthleteIdAccepted: false,

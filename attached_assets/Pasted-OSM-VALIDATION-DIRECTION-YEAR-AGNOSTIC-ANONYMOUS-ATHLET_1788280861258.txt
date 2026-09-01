@@ -1,0 +1,160 @@
+OSM VALIDATION DIRECTION — YEAR-AGNOSTIC ANONYMOUS ATHLETE
+
+For Blind Historical Validation Test #1, do NOT request or attempt to determine the anonymous athlete's draft year.
+
+OSM is defining the athlete for this test as:
+
+- Never previously drafted
+- Anonymous
+- No draft year supplied
+- No actual Draft Result supplied
+
+The athlete's draft year is intentionally withheld because it is not an approved profile variable for this validation test and could unnecessarily increase identity/outcome leakage.
+
+VALIDATION PURPOSE
+
+DiamondIQ should evaluate the supplied athlete profile against its historical evidence base based on the athlete's documented characteristics, not based on knowing which particular draft class he belongs to.
+
+The analysis should answer:
+
+Given this never-before-drafted anonymous athlete profile, what does DiamondIQ's historical evidence indicate about comparable player populations, their Draft Results, meaningful differentiating factors, and this athlete's evidence-supported market, opportunities, risks, leverage, and decision environment?
+
+YEAR-AGNOSTIC RETRIEVAL
+
+Modify the anonymous validation retrieval path so it can operate in a year-agnostic validation mode.
+
+In this mode:
+
+- Do not require assessmentDate.
+- Do not require historicalDraftYearThrough.
+- Do not attempt to infer either value.
+- Do not search for the athlete's identity or draft year.
+- Do not attempt to identify or retrieve his actual Draft Result.
+- Do not attach the profile to any canonical athlete.
+- Do not identity-match the profile against draft_players.
+
+Use the available historical production evidence as the comparison library.
+
+The athlete himself is not part of the historical cohort because the anonymous input has no canonical identity relationship.
+
+IMPORTANT INTERPRETATION
+
+This is intentionally different from a strict historical point-in-time backtest.
+
+It is testing what DiamondIQ would conclude TODAY from its current historical evidence base if presented with this anonymous, never-before-drafted athlete profile.
+
+Therefore, the report should clearly record:
+
+Validation mode: CURRENT-EVIDENCE / YEAR-AGNOSTIC / ANONYMOUS / NEVER-PREVIOUSLY-DRAFTED
+
+Do not describe this test as a point-in-time historical reconstruction.
+
+PROFILE
+
+Class: JR / Junior
+Position: C
+School: Nebraska
+Age: 20.9
+Bats/Throws: R/R
+Height: 5'11"
+Weight: 215 lbs
+
+Rankings:
+- MLB Rank: 173
+- Perfect Game Draft Board Rank: 92
+- Baseball America Draft Rank: 300
+
+Scouting Grades:
+- Hit: 45
+- Power: 50
+- Run: 40
+- Arm: 55
+- Field: 45
+- Overall: 40
+
+Summer-league history:
+- Coastal Plain League participation
+- Northwoods League participation
+- No Cape Cod League participation
+
+ATTRIBUTE HANDLING
+
+Use supplied attributes only where the production evidence architecture supports legitimate comparison.
+
+Do not invent mappings merely to use more variables.
+
+Specifically:
+
+- Position may be a required cohort criterion.
+- If JR is an exact existing source class code, it may be examined transparently as a nested/parallel cohort. Do not silently equate it with other class codes unless already approved.
+- Age 20.9 is supplied as current athlete age. Do not silently convert it into another age definition.
+- Height, weight, bats and throws may be examined through transparent factual cohorts.
+- School may be examined factually, but do not assume Nebraska itself should be a required comparison criterion.
+- MLB Rank 173 may only be used to the extent current production coverage supports it.
+- Perfect Game Rank 92 and Baseball America Rank 300 remain descriptive unless their existing identity architecture safely supports Draft Result comparison.
+- Scouting grades remain athlete profile evidence but must not be compared historically if corresponding historical 20–80 grade evidence does not exist.
+- Northwoods and Coastal Plain participation remain athlete profile evidence but must not be used for historical outcome comparison if DiamondIQ lacks those league datasets.
+- Absence of Cape participation must not be inferred from database absence. The supplied fact that this athlete did not participate may be stated, while historical Cape evidence may be examined only through documented participation cohorts.
+
+COHORT ANALYSIS
+
+Do not simply create one increasingly narrow cohort.
+
+Use transparent nested and parallel historical populations where supported.
+
+Show:
+- Base catcher population
+- Each meaningful supported profile characteristic
+- Population counts
+- Draft Result distribution
+- Signing evidence coverage
+- Which variables materially distinguish historical Draft Results
+- Where sample size becomes too small
+- Where evidence is unavailable
+
+Do not manufacture a similarity score.
+Do not manufacture prediction probabilities.
+Do not select filters because they make the historical results resemble any unknown athlete outcome.
+
+REPORT GENERATION
+
+After validating the year-agnostic isolation mechanism, RUN the anonymous athlete analysis.
+
+Generate the most complete DiamondIQ Draft Intelligence Report currently supported by production evidence.
+
+Freeze this as:
+
+BLIND HISTORICAL VALIDATION TEST #1 — CURRENT-EVIDENCE YEAR-AGNOSTIC REPORT
+
+Preserve the original earlier frozen catcher-only baseline unchanged.
+
+The new report must include:
+1. Athlete evidence inventory
+2. Evidence availability/coverage
+3. Historical comparison populations
+4. Draft Result distributions
+5. Nested/parallel cohort findings
+6. Ranking evidence and limitations
+7. Physical/profile findings
+8. Class/age findings where supportable
+9. Summer-league findings and limitations
+10. Signing/bonus/slot evidence where supported
+11. Meaningful differentiating factors actually demonstrated by the evidence
+12. Market assessment
+13. Opportunities
+14. Risks
+15. Leverage/decision environment
+16. Evidence gaps
+17. Overall DiamondIQ assessment
+18. Complete provenance/retrieval summary
+
+Do not identify the athlete.
+Do not search for the athlete.
+Do not search for his draft year.
+Do not search for his Draft Result.
+Do not use general/model baseball knowledge.
+Do not fabricate missing evidence.
+
+Freeze the exact output before returning it.
+
+Then STOP for OSM review and athlete reveal.

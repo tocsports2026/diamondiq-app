@@ -1,0 +1,2445 @@
+{
+  "validationTest": "Blind Historical Validation Test #1",
+  "reportTitle": "BLIND HISTORICAL VALIDATION TEST #1 — CURRENT-EVIDENCE YEAR-AGNOSTIC REPORT",
+  "status": "FROZEN",
+  "frozenAt": "2026-09-01 16:47:00.442324+00",
+  "validationMode": "CURRENT-EVIDENCE / YEAR-AGNOSTIC / ANONYMOUS / NEVER-PREVIOUSLY-DRAFTED",
+  "interpretation": "This is a current-evidence, year-agnostic anonymous validation. It is not a point-in-time historical reconstruction and does not use or infer an athlete draft year.",
+  "blindConditions": {
+    "athleteIdentityWithheld": true,
+    "neverPreviouslyDraftedAsSuppliedByOSM": true,
+    "draftYearSupplied": false,
+    "draftYearRequested": false,
+    "draftYearInferred": false,
+    "actualDraftResultSupplied": false,
+    "identitySearchAttempted": false,
+    "actualDraftResultSearchAttempted": false,
+    "canonicalAthleteAssociationCreated": false,
+    "productionEvidenceOnly": true,
+    "fixtureRecordsUsed": false,
+    "modelKnowledgeUsed": false,
+    "similarityScoreGenerated": false,
+    "predictionProbabilityGenerated": false,
+    "persistedToProductionReports": false
+  },
+  "anonymousAthleteProfile": {
+    "identity": "withheld by OSM",
+    "class": "JR / Junior",
+    "exactSourceClassCodeExamined": "JR",
+    "position": "C",
+    "school": "Nebraska",
+    "age": 20.9,
+    "bats": "R",
+    "throws": "R",
+    "height": "5'11\"",
+    "heightIn": 71,
+    "weightLbs": 215,
+    "rankings": {
+      "mlbRank": 173,
+      "perfectGameDraftBoardRank": 92,
+      "baseballAmericaDraftRank": 300
+    },
+    "scoutingGrades": {
+      "hit": 45,
+      "power": 50,
+      "run": 40,
+      "arm": 55,
+      "field": 45,
+      "overall": 40
+    },
+    "summerLeagueHistory": {
+      "coastalPlainLeague": "played",
+      "northwoodsLeague": "played",
+      "capeCodBaseballLeague": "did_not_play"
+    }
+  },
+  "reportSections": [
+    {
+      "id": 1,
+      "title": "Athlete evidence inventory",
+      "evidenceClass": "OSM-supplied anonymous profile",
+      "content": "The supplied position, exact JR source code, current age, physical attributes, handedness, school, rankings, scouting grades, and summer-league statements are preserved. No name, athlete ID, draft year, or Draft Result is present."
+    },
+    {
+      "id": 2,
+      "title": "Evidence availability and coverage",
+      "evidenceClass": "verified_public aggregate coverage",
+      "content": {
+        "baseHistoricalRecords": 33567,
+        "draftPlayersFieldCoverage": {
+          "total": 33567,
+          "nonNullRows": {
+            "position": 33567,
+            "playerClass": 32825,
+            "ageAtDraft": 30417,
+            "heightIn": 32117,
+            "weightLbs": 32071,
+            "bats": 32139,
+            "throws": 32139,
+            "school": 33042,
+            "schoolType": 3122,
+            "mlbRank": 198
+          }
+        },
+        "suppliedFieldAssessments": {
+          "position": {
+            "historicalEvidenceRows": 33567,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "required_cohort_criterion"
+          },
+          "class": {
+            "historicalEvidenceRows": 32825,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "secondary_cohort_criterion",
+            "note": "User-facing class labels require an explicit source-code mapping; no mapping is inferred."
+          },
+          "age": {
+            "historicalEvidenceRows": 30417,
+            "directOutcomeCohortSupport": false,
+            "recommendedUse": "descriptive_context_only",
+            "note": "Assessment age is not silently treated as age at draft."
+          },
+          "height": {
+            "historicalEvidenceRows": 32117,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "secondary_differentiating_factor"
+          },
+          "weight": {
+            "historicalEvidenceRows": 32071,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "secondary_differentiating_factor"
+          },
+          "bats": {
+            "historicalEvidenceRows": 32139,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "secondary_differentiating_factor"
+          },
+          "throws": {
+            "historicalEvidenceRows": 32139,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "secondary_differentiating_factor"
+          },
+          "school": {
+            "historicalEvidenceRows": 33042,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "secondary_cohort_criterion"
+          },
+          "schoolTypeOrLevel": {
+            "historicalEvidenceRows": 3122,
+            "directOutcomeCohortSupport": false,
+            "recommendedUse": "descriptive_context_only",
+            "note": "level is not mapped to school_type without an explicit source mapping."
+          },
+          "mlbRanking": {
+            "historicalEvidenceRows": 198,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "secondary_differentiating_factor"
+          },
+          "perfectGameRanking": {
+            "historicalEvidenceRows": 7060,
+            "directOutcomeCohortSupport": false,
+            "recommendedUse": "descriptive_context_only",
+            "note": "Ranking rows are preserved separately and are not identity-joined to draft_players."
+          },
+          "baseballAmericaRanking": {
+            "historicalEvidenceRows": 4376,
+            "directOutcomeCohortSupport": false,
+            "recommendedUse": "descriptive_context_only",
+            "note": "Ranking rows are preserved separately and are not identity-joined to draft_players."
+          },
+          "scoutingGrades": {
+            "historicalEvidenceRows": 5995,
+            "directOutcomeCohortSupport": false,
+            "recommendedUse": "secondary_differentiating_factor",
+            "note": "Stored evaluation metrics are exposed as coverage/context only; no grade-to-outcome identity join is performed."
+          },
+          "summerLeagueParticipation": {
+            "historicalEvidenceRows": 18733,
+            "directOutcomeCohortSupport": true,
+            "recommendedUse": "parallel_evidence_cohort",
+            "note": "Only deterministic production observation links can form a parallel cohort; non-participation is never inferred from absence."
+          }
+        },
+        "rankingSourceCoverage": [
+          {
+            "source": "Baseball America",
+            "records": 4376
+          },
+          {
+            "source": "FanGraphs",
+            "records": 843
+          },
+          {
+            "source": "MLB",
+            "records": 2191
+          },
+          {
+            "source": "Perfect Game",
+            "records": 7060
+          },
+          {
+            "source": "Prep Baseball Report",
+            "records": 5995
+          }
+        ],
+        "evaluationMetricCoverage": [
+          {
+            "metric": "10-Yard",
+            "records": 3277
+          },
+          {
+            "metric": "30-Yard",
+            "records": 3277
+          },
+          {
+            "metric": "60-Yard",
+            "records": 5995
+          },
+          {
+            "metric": "Bat Speed (max)",
+            "records": 3277
+          },
+          {
+            "metric": "C Velo",
+            "records": 5995
+          },
+          {
+            "metric": "Distance (max)",
+            "records": 3277
+          },
+          {
+            "metric": "Exit Velocity (avg)",
+            "records": 5995
+          },
+          {
+            "metric": "Exit Velocity (max)",
+            "records": 5995
+          },
+          {
+            "metric": "Hand Speed (max)",
+            "records": 3277
+          },
+          {
+            "metric": "Hard Hit %",
+            "records": 3277
+          },
+          {
+            "metric": "INF Velo",
+            "records": 5995
+          },
+          {
+            "metric": "OF Velo",
+            "records": 5995
+          },
+          {
+            "metric": "Pop Time",
+            "records": 5995
+          },
+          {
+            "metric": "Rot. Acc (max)",
+            "records": 3277
+          },
+          {
+            "metric": "Run Speed (max)",
+            "records": 5995
+          },
+          {
+            "metric": "Spin Rate (avg)",
+            "records": 2718
+          },
+          {
+            "metric": "Sweet Spot %",
+            "records": 3277
+          },
+          {
+            "metric": "Velo Range",
+            "records": 2718
+          },
+          {
+            "metric": "Velocity (max)",
+            "records": 2718
+          }
+        ],
+        "slotValueCoverage": {
+          "records": 1228,
+          "directAnonymousCohortSupport": false,
+          "note": "Slot values are available as production evidence but are not attached to anonymous profile cohorts without a supported pick/round relationship."
+        },
+        "summerLeagueCoverage": [
+          {
+            "league": "Appalachian League",
+            "statisticRows": 2400,
+            "deterministicallyLinkedPlayers": 126
+          },
+          {
+            "league": "Cape Cod Baseball League",
+            "statisticRows": 6575,
+            "deterministicallyLinkedPlayers": 245
+          },
+          {
+            "league": "Unavailable",
+            "statisticRows": 9758,
+            "deterministicallyLinkedPlayers": 688
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "title": "Historical comparison populations",
+      "evidenceClass": "verified_public aggregate retrieval",
+      "content": {
+        "currentEvidenceBase": {
+          "recordCount": 33567,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 13590
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 1074
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 555
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 18348
+            }
+          ],
+          "draftedPercentage": 40.49,
+          "reportedBonusCoveragePercentage": 26.62,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 8937,
+            "recordsMarkedSigned": 1455,
+            "recordsWithSigningDate": 1414,
+            "recordsWithMlbOrganization": 31938
+          }
+        },
+        "catcherPopulation": {
+          "recordCount": 3041,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 1167
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 97
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 48
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 1729
+            }
+          ],
+          "draftedPercentage": 38.38,
+          "reportedBonusCoveragePercentage": 23.97,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 729,
+            "recordsMarkedSigned": 116,
+            "recordsWithSigningDate": 115,
+            "recordsWithMlbOrganization": 2896
+          }
+        },
+        "exactAllSupportedFilters": {
+          "recordCount": 0,
+          "outcomeDistribution": [],
+          "draftedPercentage": null,
+          "reportedBonusCoveragePercentage": null,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 0,
+            "recordsMarkedSigned": 0,
+            "recordsWithSigningDate": 0,
+            "recordsWithMlbOrganization": 0
+          }
+        },
+        "appliedFilters": [
+          {
+            "id": "position",
+            "label": "Position = C",
+            "field": "position",
+            "recommendedUse": "required_cohort_criterion",
+            "rationale": "Position is directly stored on the historical draft-player records."
+          },
+          {
+            "id": "class_codes",
+            "label": "Source class code in JR",
+            "field": "player_class",
+            "recommendedUse": "secondary_criterion",
+            "rationale": "Only explicit source-preserved class codes are accepted."
+          },
+          {
+            "id": "height_in",
+            "label": "Height = 71 inches",
+            "field": "height_in",
+            "recommendedUse": "secondary_criterion",
+            "rationale": "Direct source field; nested and parallel counts expose over-filtering."
+          },
+          {
+            "id": "weight_lbs",
+            "label": "Weight = 215 lbs",
+            "field": "weight_lbs",
+            "recommendedUse": "secondary_criterion",
+            "rationale": "Direct source field; no tolerance is invented."
+          },
+          {
+            "id": "bats",
+            "label": "Bats = R",
+            "field": "bats",
+            "recommendedUse": "secondary_criterion",
+            "rationale": "Direct source field; provider values are not rewritten."
+          },
+          {
+            "id": "throws",
+            "label": "Throws = R",
+            "field": "throws",
+            "recommendedUse": "secondary_criterion",
+            "rationale": "Direct source field; provider values are not rewritten."
+          },
+          {
+            "id": "school",
+            "label": "School = Nebraska",
+            "field": "school",
+            "recommendedUse": "secondary_criterion",
+            "rationale": "Exact normalized comparison to the stored school value; no fuzzy school matching."
+          },
+          {
+            "id": "mlb_rank",
+            "label": "Stored MLB rank = 173",
+            "field": "mlb_rank",
+            "recommendedUse": "secondary_criterion",
+            "rationale": "Only the direct stored draft-player MLB rank field is used."
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "title": "Draft Result distributions",
+      "evidenceClass": "verified_public aggregate retrieval",
+      "content": {
+        "base": {
+          "recordCount": 33567,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 13590
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 1074
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 555
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 18348
+            }
+          ],
+          "draftedPercentage": 40.49,
+          "reportedBonusCoveragePercentage": 26.62,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 8937,
+            "recordsMarkedSigned": 1455,
+            "recordsWithSigningDate": 1414,
+            "recordsWithMlbOrganization": 31938
+          }
+        },
+        "catcher": {
+          "recordCount": 3041,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 1167
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 97
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 48
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 1729
+            }
+          ],
+          "draftedPercentage": 38.38,
+          "reportedBonusCoveragePercentage": 23.97,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 729,
+            "recordsMarkedSigned": 116,
+            "recordsWithSigningDate": 115,
+            "recordsWithMlbOrganization": 2896
+          }
+        },
+        "exactJR": {
+          "recordCount": 5257,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 4896
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 361
+            }
+          ],
+          "draftedPercentage": 93.13,
+          "reportedBonusCoveragePercentage": 73.1,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 3843,
+            "recordsMarkedSigned": 621,
+            "recordsWithSigningDate": 612,
+            "recordsWithMlbOrganization": 5257
+          }
+        },
+        "height71": {
+          "recordCount": 2375,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 917
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 61
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 34
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 1363
+            }
+          ],
+          "draftedPercentage": 38.61,
+          "reportedBonusCoveragePercentage": 21.6,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 513,
+            "recordsMarkedSigned": 3,
+            "recordsWithSigningDate": 3,
+            "recordsWithMlbOrganization": 2280
+          }
+        },
+        "weight215": {
+          "recordCount": 2118,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 717
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 73
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 45
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 1283
+            }
+          ],
+          "draftedPercentage": 33.85,
+          "reportedBonusCoveragePercentage": 21.01,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 445,
+            "recordsMarkedSigned": 4,
+            "recordsWithSigningDate": 4,
+            "recordsWithMlbOrganization": 2000
+          }
+        },
+        "batsR": {
+          "recordCount": 21567,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 8168
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 703
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 370
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 12326
+            }
+          ],
+          "draftedPercentage": 37.87,
+          "reportedBonusCoveragePercentage": 22.87,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 4932,
+            "recordsMarkedSigned": 57,
+            "recordsWithSigningDate": 57,
+            "recordsWithMlbOrganization": 20494
+          }
+        },
+        "throwsR": {
+          "recordCount": 26336,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 9959
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 880
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 453
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 15044
+            }
+          ],
+          "draftedPercentage": 37.82,
+          "reportedBonusCoveragePercentage": 23.03,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 6066,
+            "recordsMarkedSigned": 64,
+            "recordsWithSigningDate": 64,
+            "recordsWithMlbOrganization": 25003
+          }
+        },
+        "nebraska": {
+          "recordCount": 80,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 32
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 48
+            }
+          ],
+          "draftedPercentage": 40,
+          "reportedBonusCoveragePercentage": 22.5,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 18,
+            "recordsMarkedSigned": 0,
+            "recordsWithSigningDate": 0,
+            "recordsWithMlbOrganization": 80
+          }
+        },
+        "exactMlbRank173": {
+          "recordCount": 1,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 1
+            }
+          ],
+          "draftedPercentage": 100,
+          "reportedBonusCoveragePercentage": 100,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 1,
+            "recordsMarkedSigned": 1,
+            "recordsWithSigningDate": 1,
+            "recordsWithMlbOrganization": 1
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Nested and parallel cohort findings",
+      "evidenceClass": "verified_public aggregate retrieval",
+      "content": {
+        "nested": [
+          {
+            "afterFilter": "Position = C",
+            "appliedFilters": [
+              "Position = C"
+            ],
+            "summary": {
+              "recordCount": 3041,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 1167
+                },
+                {
+                  "outcome": "Undrafted / continued amateur pathway",
+                  "records": 97
+                },
+                {
+                  "outcome": "Undrafted / no professional signing found",
+                  "records": 48
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 1729
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 729,
+                "recordsMarkedSigned": 116,
+                "recordsWithSigningDate": 115,
+                "recordsWithMlbOrganization": 2896
+              }
+            }
+          },
+          {
+            "afterFilter": "Source class code in JR",
+            "appliedFilters": [
+              "Position = C",
+              "Source class code in JR"
+            ],
+            "summary": {
+              "recordCount": 428,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 394
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 34
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 314,
+                "recordsMarkedSigned": 44,
+                "recordsWithSigningDate": 44,
+                "recordsWithMlbOrganization": 428
+              }
+            }
+          },
+          {
+            "afterFilter": "Height = 71 inches",
+            "appliedFilters": [
+              "Position = C",
+              "Source class code in JR",
+              "Height = 71 inches"
+            ],
+            "summary": {
+              "recordCount": 47,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 45
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 2
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 36,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 47
+              }
+            }
+          },
+          {
+            "afterFilter": "Weight = 215 lbs",
+            "appliedFilters": [
+              "Position = C",
+              "Source class code in JR",
+              "Height = 71 inches",
+              "Weight = 215 lbs"
+            ],
+            "summary": {
+              "recordCount": 3,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 3
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 2,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 3
+              }
+            }
+          },
+          {
+            "afterFilter": "Bats = R",
+            "appliedFilters": [
+              "Position = C",
+              "Source class code in JR",
+              "Height = 71 inches",
+              "Weight = 215 lbs",
+              "Bats = R"
+            ],
+            "summary": {
+              "recordCount": 2,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 2
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 1,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 2
+              }
+            }
+          },
+          {
+            "afterFilter": "Throws = R",
+            "appliedFilters": [
+              "Position = C",
+              "Source class code in JR",
+              "Height = 71 inches",
+              "Weight = 215 lbs",
+              "Bats = R",
+              "Throws = R"
+            ],
+            "summary": {
+              "recordCount": 2,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 2
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 1,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 2
+              }
+            }
+          },
+          {
+            "afterFilter": "School = Nebraska",
+            "appliedFilters": [
+              "Position = C",
+              "Source class code in JR",
+              "Height = 71 inches",
+              "Weight = 215 lbs",
+              "Bats = R",
+              "Throws = R",
+              "School = Nebraska"
+            ],
+            "summary": {
+              "recordCount": 1,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 1
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 1,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 1
+              }
+            }
+          },
+          {
+            "afterFilter": "Stored MLB rank = 173",
+            "appliedFilters": [
+              "Position = C",
+              "Source class code in JR",
+              "Height = 71 inches",
+              "Weight = 215 lbs",
+              "Bats = R",
+              "Throws = R",
+              "School = Nebraska",
+              "Stored MLB rank = 173"
+            ],
+            "summary": {
+              "recordCount": 0,
+              "outcomeDistribution": [],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 0,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 0
+              }
+            }
+          }
+        ],
+        "parallel": [
+          {
+            "filter": "Position = C",
+            "summary": {
+              "recordCount": 3041,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 1167
+                },
+                {
+                  "outcome": "Undrafted / continued amateur pathway",
+                  "records": 97
+                },
+                {
+                  "outcome": "Undrafted / no professional signing found",
+                  "records": 48
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 1729
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 729,
+                "recordsMarkedSigned": 116,
+                "recordsWithSigningDate": 115,
+                "recordsWithMlbOrganization": 2896
+              }
+            }
+          },
+          {
+            "filter": "Source class code in JR",
+            "summary": {
+              "recordCount": 5257,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 4896
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 361
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 3843,
+                "recordsMarkedSigned": 621,
+                "recordsWithSigningDate": 612,
+                "recordsWithMlbOrganization": 5257
+              }
+            }
+          },
+          {
+            "filter": "Height = 71 inches",
+            "summary": {
+              "recordCount": 2375,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 917
+                },
+                {
+                  "outcome": "Undrafted / continued amateur pathway",
+                  "records": 61
+                },
+                {
+                  "outcome": "Undrafted / no professional signing found",
+                  "records": 34
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 1363
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 513,
+                "recordsMarkedSigned": 3,
+                "recordsWithSigningDate": 3,
+                "recordsWithMlbOrganization": 2280
+              }
+            }
+          },
+          {
+            "filter": "Weight = 215 lbs",
+            "summary": {
+              "recordCount": 2118,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 717
+                },
+                {
+                  "outcome": "Undrafted / continued amateur pathway",
+                  "records": 73
+                },
+                {
+                  "outcome": "Undrafted / no professional signing found",
+                  "records": 45
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 1283
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 445,
+                "recordsMarkedSigned": 4,
+                "recordsWithSigningDate": 4,
+                "recordsWithMlbOrganization": 2000
+              }
+            }
+          },
+          {
+            "filter": "Bats = R",
+            "summary": {
+              "recordCount": 21567,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 8168
+                },
+                {
+                  "outcome": "Undrafted / continued amateur pathway",
+                  "records": 703
+                },
+                {
+                  "outcome": "Undrafted / no professional signing found",
+                  "records": 370
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 12326
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 4932,
+                "recordsMarkedSigned": 57,
+                "recordsWithSigningDate": 57,
+                "recordsWithMlbOrganization": 20494
+              }
+            }
+          },
+          {
+            "filter": "Throws = R",
+            "summary": {
+              "recordCount": 26336,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 9959
+                },
+                {
+                  "outcome": "Undrafted / continued amateur pathway",
+                  "records": 880
+                },
+                {
+                  "outcome": "Undrafted / no professional signing found",
+                  "records": 453
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 15044
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 6066,
+                "recordsMarkedSigned": 64,
+                "recordsWithSigningDate": 64,
+                "recordsWithMlbOrganization": 25003
+              }
+            }
+          },
+          {
+            "filter": "School = Nebraska",
+            "summary": {
+              "recordCount": 80,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 32
+                },
+                {
+                  "outcome": "Undrafted / signed as free agent",
+                  "records": 48
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 18,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 80
+              }
+            }
+          },
+          {
+            "filter": "Stored MLB rank = 173",
+            "summary": {
+              "recordCount": 1,
+              "outcomeDistribution": [
+                {
+                  "outcome": "Drafted",
+                  "records": 1
+                }
+              ],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 1,
+                "recordsMarkedSigned": 1,
+                "recordsWithSigningDate": 1,
+                "recordsWithMlbOrganization": 1
+              }
+            }
+          }
+        ],
+        "summerParallel": [
+          {
+            "league": "Coastal Plain League",
+            "state": "played",
+            "summary": {
+              "recordCount": 0,
+              "outcomeDistribution": [],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 0,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 0
+              }
+            }
+          },
+          {
+            "league": "Northwoods League",
+            "state": "played",
+            "summary": {
+              "recordCount": 0,
+              "outcomeDistribution": [],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 0,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 0
+              }
+            }
+          },
+          {
+            "league": "Cape Cod Baseball League",
+            "state": "did_not_play",
+            "summary": null
+          }
+        ],
+        "finding": "Sequential filtering falls from 3,041 catchers to 428 C+JR records, 47 after exact height, 3 after exact weight, 2 after batting hand, 2 after throwing hand, 1 after exact school, and 0 after exact MLB rank. Therefore the exact all-fields cohort is not used as an individualized forecast."
+      }
+    },
+    {
+      "id": 6,
+      "title": "Ranking evidence and limitations",
+      "evidenceClass": "verified_public coverage",
+      "content": {
+        "mlbRank173": {
+          "recordCount": 1,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 1
+            }
+          ],
+          "draftedPercentage": 100,
+          "reportedBonusCoveragePercentage": 100,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 1,
+            "recordsMarkedSigned": 1,
+            "recordsWithSigningDate": 1,
+            "recordsWithMlbOrganization": 1
+          }
+        },
+        "mlbCoverageRows": 198,
+        "perfectGameCoverageRows": 7060,
+        "baseballAmericaCoverageRows": 4376,
+        "limitation": "Exact MLB rank 173 has one historical record across all positions and zero in the fully nested cohort. Perfect Game and Baseball America rankings remain descriptive because their ranking rows are not safely identity-joined to draft_players."
+      }
+    },
+    {
+      "id": 7,
+      "title": "Physical and profile findings",
+      "evidenceClass": "verified_public aggregate retrieval",
+      "content": {
+        "height71": {
+          "recordCount": 2375,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 917
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 61
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 34
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 1363
+            }
+          ],
+          "draftedPercentage": 38.61,
+          "reportedBonusCoveragePercentage": 21.6,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 513,
+            "recordsMarkedSigned": 3,
+            "recordsWithSigningDate": 3,
+            "recordsWithMlbOrganization": 2280
+          }
+        },
+        "weight215": {
+          "recordCount": 2118,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 717
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 73
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 45
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 1283
+            }
+          ],
+          "draftedPercentage": 33.85,
+          "reportedBonusCoveragePercentage": 21.01,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 445,
+            "recordsMarkedSigned": 4,
+            "recordsWithSigningDate": 4,
+            "recordsWithMlbOrganization": 2000
+          }
+        },
+        "batsR": {
+          "recordCount": 21567,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 8168
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 703
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 370
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 12326
+            }
+          ],
+          "draftedPercentage": 37.87,
+          "reportedBonusCoveragePercentage": 22.87,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 4932,
+            "recordsMarkedSigned": 57,
+            "recordsWithSigningDate": 57,
+            "recordsWithMlbOrganization": 20494
+          }
+        },
+        "throwsR": {
+          "recordCount": 26336,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 9959
+            },
+            {
+              "outcome": "Undrafted / continued amateur pathway",
+              "records": 880
+            },
+            {
+              "outcome": "Undrafted / no professional signing found",
+              "records": 453
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 15044
+            }
+          ],
+          "draftedPercentage": 37.82,
+          "reportedBonusCoveragePercentage": 23.03,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 6066,
+            "recordsMarkedSigned": 64,
+            "recordsWithSigningDate": 64,
+            "recordsWithMlbOrganization": 25003
+          }
+        },
+        "finding": "Height 71 inches (38.61% drafted), bats R (37.87%), and throws R (37.82%) are close to the catcher population drafted share of 38.38%. Weight 215 has a lower observed drafted share of 33.85%. These are parallel factual comparisons, not causal effects."
+      }
+    },
+    {
+      "id": 8,
+      "title": "Class and age findings",
+      "evidenceClass": "verified_public aggregate retrieval plus unavailable-age limitation",
+      "content": {
+        "exactJR": {
+          "recordCount": 5257,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 4896
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 361
+            }
+          ],
+          "draftedPercentage": 93.13,
+          "reportedBonusCoveragePercentage": 73.1,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 3843,
+            "recordsMarkedSigned": 621,
+            "recordsWithSigningDate": 612,
+            "recordsWithMlbOrganization": 5257
+          }
+        },
+        "catcherThenJR": {
+          "recordCount": 428,
+          "outcomeDistribution": [
+            {
+              "outcome": "Drafted",
+              "records": 394
+            },
+            {
+              "outcome": "Undrafted / signed as free agent",
+              "records": 34
+            }
+          ],
+          "draftedPercentage": 92.06,
+          "reportedBonusCoveragePercentage": 73.36,
+          "signingEvidence": {
+            "recordsWithReportedBonus": 314,
+            "recordsMarkedSigned": 44,
+            "recordsWithSigningDate": 44,
+            "recordsWithMlbOrganization": 428
+          }
+        },
+        "finding": "JR is an exact stored source code and is not merged with 4YR JR, HS JR, or other codes. The all-position JR cohort is 5,257 records with 93.13% drafted; the catcher+JR cohort is 428 records with 92.06% drafted. Current age 20.9 is not compared because historical evidence stores age at draft, a different definition."
+      }
+    },
+    {
+      "id": 9,
+      "title": "Summer-league findings and limitations",
+      "evidenceClass": "verified_public aggregate retrieval plus OSM-supplied profile facts",
+      "content": {
+        "supplied": {
+          "coastalPlain": "played",
+          "northwoods": "played",
+          "capeCod": "did_not_play"
+        },
+        "historicalCoverage": [
+          {
+            "league": "Appalachian League",
+            "statisticRows": 2400,
+            "deterministicallyLinkedPlayers": 126
+          },
+          {
+            "league": "Cape Cod Baseball League",
+            "statisticRows": 6575,
+            "deterministicallyLinkedPlayers": 245
+          },
+          {
+            "league": "Unavailable",
+            "statisticRows": 9758,
+            "deterministicallyLinkedPlayers": 688
+          }
+        ],
+        "parallelResults": [
+          {
+            "league": "Coastal Plain League",
+            "state": "played",
+            "summary": {
+              "recordCount": 0,
+              "outcomeDistribution": [],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 0,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 0
+              }
+            }
+          },
+          {
+            "league": "Northwoods League",
+            "state": "played",
+            "summary": {
+              "recordCount": 0,
+              "outcomeDistribution": [],
+              "signingEvidence": {
+                "recordsWithReportedBonus": 0,
+                "recordsMarkedSigned": 0,
+                "recordsWithSigningDate": 0,
+                "recordsWithMlbOrganization": 0
+              }
+            }
+          },
+          {
+            "league": "Cape Cod Baseball League",
+            "state": "did_not_play",
+            "summary": null
+          }
+        ],
+        "finding": "No Coastal Plain or Northwoods production league rows were found, so those supplied facts remain profile evidence only. Cape non-participation is stated as supplied and is not inferred from database absence or used as a negative comparison."
+      }
+    },
+    {
+      "id": 10,
+      "title": "Signing, bonus, and slot evidence",
+      "evidenceClass": "verified_public aggregate retrieval",
+      "content": {
+        "catcherSigningEvidence": {
+          "recordsWithReportedBonus": 729,
+          "recordsMarkedSigned": 116,
+          "recordsWithSigningDate": 115,
+          "recordsWithMlbOrganization": 2896
+        },
+        "catcherReportedBonusCoveragePercentage": 23.97,
+        "catcherJRSigningEvidence": {
+          "recordsWithReportedBonus": 314,
+          "recordsMarkedSigned": 44,
+          "recordsWithSigningDate": 44,
+          "recordsWithMlbOrganization": 428
+        },
+        "slotValueCoverage": {
+          "records": 1228,
+          "directAnonymousCohortSupport": false,
+          "note": "Slot values are available as production evidence but are not attached to anonymous profile cohorts without a supported pick/round relationship."
+        },
+        "finding": "Reported bonus coverage is 23.97% in the catcher population and 73.36% in catcher+JR. Slot values exist but cannot be attached to this anonymous profile without a supported pick or round relationship."
+      }
+    },
+    {
+      "id": 11,
+      "title": "Meaningful differentiating factors demonstrated by evidence",
+      "evidenceClass": "calculated from aggregate verified_public counts",
+      "content": {
+        "demonstrated": [
+          {
+            "factor": "Exact source class code JR",
+            "observation": "93.13% drafted across 5,257 records; 92.06% across 428 catcher+JR records versus 38.38% across 3,041 catchers."
+          }
+        ],
+        "notDemonstratedAsMaterial": [
+          {
+            "factor": "Height 71 inches",
+            "observation": "38.61% drafted versus 38.38% catcher baseline."
+          },
+          {
+            "factor": "Bats R",
+            "observation": "37.87% drafted versus 38.38% catcher baseline."
+          },
+          {
+            "factor": "Throws R",
+            "observation": "37.82% drafted versus 38.38% catcher baseline."
+          }
+        ],
+        "limited": [
+          {
+            "factor": "Weight 215 lbs",
+            "observation": "33.85% drafted across 2,118 all-position records; no causal conclusion."
+          },
+          {
+            "factor": "Nebraska",
+            "observation": "40.00% drafted across 80 records; close to the 40.49% full evidence-base share."
+          },
+          {
+            "factor": "MLB rank 173",
+            "observation": "One all-position record and zero in the fully nested cohort; insufficient for a distribution."
+          }
+        ],
+        "caution": "No formal materiality or minimum-sample threshold has been approved. Differences are reported arithmetically and are not causal or predictive."
+      }
+    },
+    {
+      "id": 12,
+      "title": "Market assessment",
+      "evidenceClass": "DiamondIQ evidence synthesis constrained to retrieved aggregates",
+      "content": "The current evidence supports a broad market-context assessment, not an individualized Draft Result forecast. The catcher comparison population is 3,041 records with 38.38% drafted. Exact JR status is the strongest observed separator in available data, but the exact all-supported-attribute cohort is zero and ranking coverage is sparse."
+    },
+    {
+      "id": 13,
+      "title": "Opportunities",
+      "evidenceClass": "DiamondIQ evidence synthesis constrained to retrieved aggregates",
+      "content": [
+        "The exact JR cohort is strongly associated with drafted records in this evidence base.",
+        "The catcher+JR population remains large enough to expose a multi-outcome distribution before additional exact physical filters collapse the sample.",
+        "Reported bonus evidence is available for 314 of 428 catcher+JR records, enabling documented compensation context without imputing missing values."
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Risks",
+      "evidenceClass": "DiamondIQ evidence synthesis constrained to retrieved aggregates",
+      "content": [
+        "Exact-filter attrition reaches 47 records after height, 3 after weight, 2 after handedness, 1 after school, and 0 after MLB rank.",
+        "MLB rank coverage is sparse; Perfect Game and Baseball America ranks cannot be safely joined to outcomes.",
+        "Historical 20–80 scouting-grade comparators are unavailable.",
+        "Coastal Plain and Northwoods datasets are unavailable; Cape absence cannot be used as negative evidence.",
+        "The JR result may reflect source composition and cannot be treated as a causal class effect."
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Leverage and decision environment",
+      "evidenceClass": "evidence-gap statement",
+      "content": "No individualized leverage conclusion is supported. Bonus and slot evidence provide market context, but the anonymous profile has no supported pick, round, offer, or contract relationship. The evidence supports comparison and uncertainty disclosure only."
+    },
+    {
+      "id": 16,
+      "title": "Evidence gaps",
+      "evidenceClass": "retrieval coverage audit",
+      "content": [
+        "No historical comparator for current age 20.9 under the same definition.",
+        "No historical Hit/Power/Run/Arm/Field/Overall 20–80 grade fields.",
+        "No safe Perfect Game or Baseball America ranking-to-outcome join.",
+        "No Coastal Plain or Northwoods outcome-comparison dataset.",
+        "No negative-inference basis for Cape non-participation.",
+        "No supported anonymous-profile slot or offer relationship.",
+        "No exact all-supported-fields historical cohort."
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Overall DiamondIQ assessment",
+      "evidenceClass": "DiamondIQ evidence synthesis constrained to retrieved aggregates",
+      "content": "Current production evidence identifies exact JR class code as the clearest observed historical separator for this anonymous catcher profile. Position, exact height, handedness, and school comparisons do not materially separate drafted share in the available parallel populations; exact weight is lower, but not causal. Because the fully filtered cohort is zero and several supplied evidence types are unavailable or unlinked, DiamondIQ does not assign a probability, similarity score, predicted Draft Result, or individualized leverage conclusion."
+    },
+    {
+      "id": 18,
+      "title": "Complete provenance and retrieval summary",
+      "evidenceClass": "system provenance",
+      "content": {
+        "rawRetrievalSha256": "8e037e3ead85de432a1028b7ecdbdd92e5fa42d7a48dfe80acd2c1932b265248",
+        "tablesQueried": [
+          "draft_players",
+          "historical_rankings",
+          "player_evaluation_observations",
+          "player_season_statistics",
+          "source_player_identity_links",
+          "slot_values"
+        ],
+        "currentNonFixtureTableCounts": {
+          "draft_players": 34080,
+          "historical_rankings": 20465,
+          "player_evaluation_observations": 5995,
+          "player_season_statistics": 18733,
+          "source_player_identity_links": 32709,
+          "slot_values": 1228
+        },
+        "materialSourceFiles": [
+          {
+            "id": 3,
+            "filename": "2021-2026 MLB Draft Payroll and Draft Summaries.xlsx",
+            "sha256": "f84ee579deb6722d86418da273b7ab2855df929e7d3b09e0357ec1b4e342d80a",
+            "rows": 189
+          },
+          {
+            "id": 4,
+            "filename": "2021-2025 Club Spending Draft Analysis.xlsx",
+            "sha256": "cd0759332ca0499531d21df8cf60e3ff935bd16b033ebe5abc2749b13d72ed71",
+            "rows": 176
+          },
+          {
+            "id": 5,
+            "filename": "2025 Draft Signings FINAL.xlsx",
+            "sha256": "2fcbdce09c7ad2687ec7667ed29c4c9be35b3998e851b8ff362e66c0943052bd",
+            "rows": 777
+          },
+          {
+            "id": 6,
+            "filename": "2021-2026 MLB Draft Payroll and Draft Summaries(1).xlsx",
+            "sha256": "e5a6a162e8daba9be4472bd13e9e1cf35b698fc6f18daac4c37d4b2489e4b2a1",
+            "rows": 176
+          },
+          {
+            "id": 8,
+            "filename": "DiamondIQ_2026_Draft_Outcomes_and_Undrafted_Population.xlsx",
+            "sha256": "b9bc2c61267b503738a620e2840553e7b5f7f414a2b3626b41aab54a0150ea6a",
+            "rows": 2567
+          },
+          {
+            "id": 9,
+            "filename": "Comprehensive Draft Database 2012-2025 Updated WIP.xlsx",
+            "sha256": "842712acb17037b5329322c0927fcd6480290bedf58294e6d01c4c4f577dc8e3",
+            "rows": 32247
+          },
+          {
+            "id": 10,
+            "filename": "DiamondIQ_Supplemental_Evidence_Batch1_Ingestion.xlsx",
+            "sha256": "b9d4b21695897e64ef9da355eba5e50e67aa2d82afebabfa6ff6960cc1a94b48",
+            "rows": 24763
+          }
+        ],
+        "isolation": {
+          "canonicalAthleteIdAccepted": false,
+          "identityFieldsAccepted": false,
+          "playerNamesReturned": false,
+          "playerIdsReturned": false,
+          "identityMatchingPerformed": false,
+          "futureOutcomeLookupPerformed": false,
+          "sourceEvidenceModified": false,
+          "predictiveOrSimilarityScoreGenerated": false
+        },
+        "evidenceRules": {
+          "missingAttributesRemainMissing": true,
+          "absentParticipationNotTreatedAsNegative": true,
+          "providerMetricsReinterpreted": false,
+          "sourceDrivenOutcomeDistribution": true,
+          "productionEvidenceGuard": "All draft, ranking, evaluation, statistics, and identity-link reads are restricted to non-fixture evidence; deterministic links are used only for summer parallel-cohort aggregation."
+        }
+      }
+    }
+  ],
+  "exactRetrievalOutput": {
+    "validationOnly": true,
+    "persisted": false,
+    "validationMode": "CURRENT-EVIDENCE / YEAR-AGNOSTIC / ANONYMOUS / NEVER-PREVIOUSLY-DRAFTED",
+    "historicalEvidenceBasis": "Current non-fixture production evidence is used as the comparison library; no athlete draft year or assessment date is requested, inferred, or applied.",
+    "anonymousProfile": {
+      "class": "JR / Junior",
+      "classCodes": [
+        "JR"
+      ],
+      "position": "C",
+      "school": "Nebraska",
+      "age": 20.9,
+      "bats": "R",
+      "throws": "R",
+      "heightIn": 71,
+      "weightLbs": 215,
+      "rankings": {
+        "mlb": 173,
+        "perfectGame": 92,
+        "baseballAmerica": 300
+      },
+      "scoutingGrades": {
+        "hit": 45,
+        "power": 50,
+        "run": 40,
+        "arm": 55,
+        "field": 45,
+        "overall": 40
+      },
+      "summerLeagueParticipation": {
+        "Coastal Plain League": "played",
+        "Northwoods League": "played",
+        "Cape Cod Baseball League": "did_not_play"
+      }
+    },
+    "isolation": {
+      "canonicalAthleteIdAccepted": false,
+      "identityFieldsAccepted": false,
+      "playerNamesReturned": false,
+      "playerIdsReturned": false,
+      "identityMatchingPerformed": false,
+      "futureOutcomeLookupPerformed": false,
+      "sourceEvidenceModified": false,
+      "predictiveOrSimilarityScoreGenerated": false
+    },
+    "evidenceCoverage": {
+      "baseHistoricalRecords": 33567,
+      "draftPlayersFieldCoverage": {
+        "total": 33567,
+        "nonNullRows": {
+          "position": 33567,
+          "playerClass": 32825,
+          "ageAtDraft": 30417,
+          "heightIn": 32117,
+          "weightLbs": 32071,
+          "bats": 32139,
+          "throws": 32139,
+          "school": 33042,
+          "schoolType": 3122,
+          "mlbRank": 198
+        }
+      },
+      "suppliedFieldAssessments": {
+        "position": {
+          "historicalEvidenceRows": 33567,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "required_cohort_criterion"
+        },
+        "class": {
+          "historicalEvidenceRows": 32825,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "secondary_cohort_criterion",
+          "note": "User-facing class labels require an explicit source-code mapping; no mapping is inferred."
+        },
+        "age": {
+          "historicalEvidenceRows": 30417,
+          "directOutcomeCohortSupport": false,
+          "recommendedUse": "descriptive_context_only",
+          "note": "Assessment age is not silently treated as age at draft."
+        },
+        "height": {
+          "historicalEvidenceRows": 32117,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "secondary_differentiating_factor"
+        },
+        "weight": {
+          "historicalEvidenceRows": 32071,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "secondary_differentiating_factor"
+        },
+        "bats": {
+          "historicalEvidenceRows": 32139,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "secondary_differentiating_factor"
+        },
+        "throws": {
+          "historicalEvidenceRows": 32139,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "secondary_differentiating_factor"
+        },
+        "school": {
+          "historicalEvidenceRows": 33042,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "secondary_cohort_criterion"
+        },
+        "schoolTypeOrLevel": {
+          "historicalEvidenceRows": 3122,
+          "directOutcomeCohortSupport": false,
+          "recommendedUse": "descriptive_context_only",
+          "note": "level is not mapped to school_type without an explicit source mapping."
+        },
+        "mlbRanking": {
+          "historicalEvidenceRows": 198,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "secondary_differentiating_factor"
+        },
+        "perfectGameRanking": {
+          "historicalEvidenceRows": 7060,
+          "directOutcomeCohortSupport": false,
+          "recommendedUse": "descriptive_context_only",
+          "note": "Ranking rows are preserved separately and are not identity-joined to draft_players."
+        },
+        "baseballAmericaRanking": {
+          "historicalEvidenceRows": 4376,
+          "directOutcomeCohortSupport": false,
+          "recommendedUse": "descriptive_context_only",
+          "note": "Ranking rows are preserved separately and are not identity-joined to draft_players."
+        },
+        "scoutingGrades": {
+          "historicalEvidenceRows": 5995,
+          "directOutcomeCohortSupport": false,
+          "recommendedUse": "secondary_differentiating_factor",
+          "note": "Stored evaluation metrics are exposed as coverage/context only; no grade-to-outcome identity join is performed."
+        },
+        "summerLeagueParticipation": {
+          "historicalEvidenceRows": 18733,
+          "directOutcomeCohortSupport": true,
+          "recommendedUse": "parallel_evidence_cohort",
+          "note": "Only deterministic production observation links can form a parallel cohort; non-participation is never inferred from absence."
+        }
+      },
+      "rankingSourceCoverage": [
+        {
+          "source": "Baseball America",
+          "records": 4376
+        },
+        {
+          "source": "FanGraphs",
+          "records": 843
+        },
+        {
+          "source": "MLB",
+          "records": 2191
+        },
+        {
+          "source": "Perfect Game",
+          "records": 7060
+        },
+        {
+          "source": "Prep Baseball Report",
+          "records": 5995
+        }
+      ],
+      "evaluationMetricCoverage": [
+        {
+          "metric": "10-Yard",
+          "records": 3277
+        },
+        {
+          "metric": "30-Yard",
+          "records": 3277
+        },
+        {
+          "metric": "60-Yard",
+          "records": 5995
+        },
+        {
+          "metric": "Bat Speed (max)",
+          "records": 3277
+        },
+        {
+          "metric": "C Velo",
+          "records": 5995
+        },
+        {
+          "metric": "Distance (max)",
+          "records": 3277
+        },
+        {
+          "metric": "Exit Velocity (avg)",
+          "records": 5995
+        },
+        {
+          "metric": "Exit Velocity (max)",
+          "records": 5995
+        },
+        {
+          "metric": "Hand Speed (max)",
+          "records": 3277
+        },
+        {
+          "metric": "Hard Hit %",
+          "records": 3277
+        },
+        {
+          "metric": "INF Velo",
+          "records": 5995
+        },
+        {
+          "metric": "OF Velo",
+          "records": 5995
+        },
+        {
+          "metric": "Pop Time",
+          "records": 5995
+        },
+        {
+          "metric": "Rot. Acc (max)",
+          "records": 3277
+        },
+        {
+          "metric": "Run Speed (max)",
+          "records": 5995
+        },
+        {
+          "metric": "Spin Rate (avg)",
+          "records": 2718
+        },
+        {
+          "metric": "Sweet Spot %",
+          "records": 3277
+        },
+        {
+          "metric": "Velo Range",
+          "records": 2718
+        },
+        {
+          "metric": "Velocity (max)",
+          "records": 2718
+        }
+      ],
+      "slotValueCoverage": {
+        "records": 1228,
+        "directAnonymousCohortSupport": false,
+        "note": "Slot values are available as production evidence but are not attached to anonymous profile cohorts without a supported pick/round relationship."
+      },
+      "summerLeagueCoverage": [
+        {
+          "league": "Appalachian League",
+          "statisticRows": 2400,
+          "deterministicallyLinkedPlayers": 126
+        },
+        {
+          "league": "Cape Cod Baseball League",
+          "statisticRows": 6575,
+          "deterministicallyLinkedPlayers": 245
+        },
+        {
+          "league": "Unavailable",
+          "statisticRows": 9758,
+          "deterministicallyLinkedPlayers": 688
+        }
+      ]
+    },
+    "cohortConstruction": {
+      "basePopulation": {
+        "recordCount": 33567,
+        "outcomeDistribution": [
+          {
+            "outcome": "Drafted",
+            "records": 13590
+          },
+          {
+            "outcome": "Undrafted / continued amateur pathway",
+            "records": 1074
+          },
+          {
+            "outcome": "Undrafted / no professional signing found",
+            "records": 555
+          },
+          {
+            "outcome": "Undrafted / signed as free agent",
+            "records": 18348
+          }
+        ],
+        "signingEvidence": {
+          "recordsWithReportedBonus": 8937,
+          "recordsMarkedSigned": 1455,
+          "recordsWithSigningDate": 1414,
+          "recordsWithMlbOrganization": 31938
+        }
+      },
+      "appliedFilters": [
+        {
+          "id": "position",
+          "label": "Position = C",
+          "field": "position",
+          "recommendedUse": "required_cohort_criterion",
+          "rationale": "Position is directly stored on the historical draft-player records."
+        },
+        {
+          "id": "class_codes",
+          "label": "Source class code in JR",
+          "field": "player_class",
+          "recommendedUse": "secondary_criterion",
+          "rationale": "Only explicit source-preserved class codes are accepted."
+        },
+        {
+          "id": "height_in",
+          "label": "Height = 71 inches",
+          "field": "height_in",
+          "recommendedUse": "secondary_criterion",
+          "rationale": "Direct source field; nested and parallel counts expose over-filtering."
+        },
+        {
+          "id": "weight_lbs",
+          "label": "Weight = 215 lbs",
+          "field": "weight_lbs",
+          "recommendedUse": "secondary_criterion",
+          "rationale": "Direct source field; no tolerance is invented."
+        },
+        {
+          "id": "bats",
+          "label": "Bats = R",
+          "field": "bats",
+          "recommendedUse": "secondary_criterion",
+          "rationale": "Direct source field; provider values are not rewritten."
+        },
+        {
+          "id": "throws",
+          "label": "Throws = R",
+          "field": "throws",
+          "recommendedUse": "secondary_criterion",
+          "rationale": "Direct source field; provider values are not rewritten."
+        },
+        {
+          "id": "school",
+          "label": "School = Nebraska",
+          "field": "school",
+          "recommendedUse": "secondary_criterion",
+          "rationale": "Exact normalized comparison to the stored school value; no fuzzy school matching."
+        },
+        {
+          "id": "mlb_rank",
+          "label": "Stored MLB rank = 173",
+          "field": "mlb_rank",
+          "recommendedUse": "secondary_criterion",
+          "rationale": "Only the direct stored draft-player MLB rank field is used."
+        }
+      ],
+      "exactFilteredPopulation": {
+        "recordCount": 0,
+        "outcomeDistribution": [],
+        "signingEvidence": {
+          "recordsWithReportedBonus": 0,
+          "recordsMarkedSigned": 0,
+          "recordsWithSigningDate": 0,
+          "recordsWithMlbOrganization": 0
+        }
+      },
+      "nestedCohorts": [
+        {
+          "afterFilter": "Position = C",
+          "appliedFilters": [
+            "Position = C"
+          ],
+          "summary": {
+            "recordCount": 3041,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 1167
+              },
+              {
+                "outcome": "Undrafted / continued amateur pathway",
+                "records": 97
+              },
+              {
+                "outcome": "Undrafted / no professional signing found",
+                "records": 48
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 1729
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 729,
+              "recordsMarkedSigned": 116,
+              "recordsWithSigningDate": 115,
+              "recordsWithMlbOrganization": 2896
+            }
+          }
+        },
+        {
+          "afterFilter": "Source class code in JR",
+          "appliedFilters": [
+            "Position = C",
+            "Source class code in JR"
+          ],
+          "summary": {
+            "recordCount": 428,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 394
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 34
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 314,
+              "recordsMarkedSigned": 44,
+              "recordsWithSigningDate": 44,
+              "recordsWithMlbOrganization": 428
+            }
+          }
+        },
+        {
+          "afterFilter": "Height = 71 inches",
+          "appliedFilters": [
+            "Position = C",
+            "Source class code in JR",
+            "Height = 71 inches"
+          ],
+          "summary": {
+            "recordCount": 47,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 45
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 2
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 36,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 47
+            }
+          }
+        },
+        {
+          "afterFilter": "Weight = 215 lbs",
+          "appliedFilters": [
+            "Position = C",
+            "Source class code in JR",
+            "Height = 71 inches",
+            "Weight = 215 lbs"
+          ],
+          "summary": {
+            "recordCount": 3,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 3
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 2,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 3
+            }
+          }
+        },
+        {
+          "afterFilter": "Bats = R",
+          "appliedFilters": [
+            "Position = C",
+            "Source class code in JR",
+            "Height = 71 inches",
+            "Weight = 215 lbs",
+            "Bats = R"
+          ],
+          "summary": {
+            "recordCount": 2,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 2
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 1,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 2
+            }
+          }
+        },
+        {
+          "afterFilter": "Throws = R",
+          "appliedFilters": [
+            "Position = C",
+            "Source class code in JR",
+            "Height = 71 inches",
+            "Weight = 215 lbs",
+            "Bats = R",
+            "Throws = R"
+          ],
+          "summary": {
+            "recordCount": 2,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 2
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 1,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 2
+            }
+          }
+        },
+        {
+          "afterFilter": "School = Nebraska",
+          "appliedFilters": [
+            "Position = C",
+            "Source class code in JR",
+            "Height = 71 inches",
+            "Weight = 215 lbs",
+            "Bats = R",
+            "Throws = R",
+            "School = Nebraska"
+          ],
+          "summary": {
+            "recordCount": 1,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 1
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 1,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 1
+            }
+          }
+        },
+        {
+          "afterFilter": "Stored MLB rank = 173",
+          "appliedFilters": [
+            "Position = C",
+            "Source class code in JR",
+            "Height = 71 inches",
+            "Weight = 215 lbs",
+            "Bats = R",
+            "Throws = R",
+            "School = Nebraska",
+            "Stored MLB rank = 173"
+          ],
+          "summary": {
+            "recordCount": 0,
+            "outcomeDistribution": [],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 0,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 0
+            }
+          }
+        }
+      ],
+      "parallelCohorts": [
+        {
+          "filter": "Position = C",
+          "summary": {
+            "recordCount": 3041,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 1167
+              },
+              {
+                "outcome": "Undrafted / continued amateur pathway",
+                "records": 97
+              },
+              {
+                "outcome": "Undrafted / no professional signing found",
+                "records": 48
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 1729
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 729,
+              "recordsMarkedSigned": 116,
+              "recordsWithSigningDate": 115,
+              "recordsWithMlbOrganization": 2896
+            }
+          }
+        },
+        {
+          "filter": "Source class code in JR",
+          "summary": {
+            "recordCount": 5257,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 4896
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 361
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 3843,
+              "recordsMarkedSigned": 621,
+              "recordsWithSigningDate": 612,
+              "recordsWithMlbOrganization": 5257
+            }
+          }
+        },
+        {
+          "filter": "Height = 71 inches",
+          "summary": {
+            "recordCount": 2375,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 917
+              },
+              {
+                "outcome": "Undrafted / continued amateur pathway",
+                "records": 61
+              },
+              {
+                "outcome": "Undrafted / no professional signing found",
+                "records": 34
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 1363
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 513,
+              "recordsMarkedSigned": 3,
+              "recordsWithSigningDate": 3,
+              "recordsWithMlbOrganization": 2280
+            }
+          }
+        },
+        {
+          "filter": "Weight = 215 lbs",
+          "summary": {
+            "recordCount": 2118,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 717
+              },
+              {
+                "outcome": "Undrafted / continued amateur pathway",
+                "records": 73
+              },
+              {
+                "outcome": "Undrafted / no professional signing found",
+                "records": 45
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 1283
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 445,
+              "recordsMarkedSigned": 4,
+              "recordsWithSigningDate": 4,
+              "recordsWithMlbOrganization": 2000
+            }
+          }
+        },
+        {
+          "filter": "Bats = R",
+          "summary": {
+            "recordCount": 21567,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 8168
+              },
+              {
+                "outcome": "Undrafted / continued amateur pathway",
+                "records": 703
+              },
+              {
+                "outcome": "Undrafted / no professional signing found",
+                "records": 370
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 12326
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 4932,
+              "recordsMarkedSigned": 57,
+              "recordsWithSigningDate": 57,
+              "recordsWithMlbOrganization": 20494
+            }
+          }
+        },
+        {
+          "filter": "Throws = R",
+          "summary": {
+            "recordCount": 26336,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 9959
+              },
+              {
+                "outcome": "Undrafted / continued amateur pathway",
+                "records": 880
+              },
+              {
+                "outcome": "Undrafted / no professional signing found",
+                "records": 453
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 15044
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 6066,
+              "recordsMarkedSigned": 64,
+              "recordsWithSigningDate": 64,
+              "recordsWithMlbOrganization": 25003
+            }
+          }
+        },
+        {
+          "filter": "School = Nebraska",
+          "summary": {
+            "recordCount": 80,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 32
+              },
+              {
+                "outcome": "Undrafted / signed as free agent",
+                "records": 48
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 18,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 80
+            }
+          }
+        },
+        {
+          "filter": "Stored MLB rank = 173",
+          "summary": {
+            "recordCount": 1,
+            "outcomeDistribution": [
+              {
+                "outcome": "Drafted",
+                "records": 1
+              }
+            ],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 1,
+              "recordsMarkedSigned": 1,
+              "recordsWithSigningDate": 1,
+              "recordsWithMlbOrganization": 1
+            }
+          }
+        }
+      ],
+      "summerParallelCohorts": [
+        {
+          "league": "Coastal Plain League",
+          "state": "played",
+          "summary": {
+            "recordCount": 0,
+            "outcomeDistribution": [],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 0,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 0
+            }
+          }
+        },
+        {
+          "league": "Northwoods League",
+          "state": "played",
+          "summary": {
+            "recordCount": 0,
+            "outcomeDistribution": [],
+            "signingEvidence": {
+              "recordsWithReportedBonus": 0,
+              "recordsMarkedSigned": 0,
+              "recordsWithSigningDate": 0,
+              "recordsWithMlbOrganization": 0
+            }
+          }
+        },
+        {
+          "league": "Cape Cod Baseball League",
+          "state": "did_not_play",
+          "summary": null
+        }
+      ],
+      "overFilteringProtection": {
+        "hiddenBroadening": false,
+        "hiddenNarrowingByOutcome": false,
+        "opaqueSimilarityScore": false,
+        "rule": "The path returns base, nested, and parallel factual populations. It never silently broadens or narrows a cohort based on Draft Results."
+      }
+    },
+    "evidenceRules": {
+      "missingAttributesRemainMissing": true,
+      "absentParticipationNotTreatedAsNegative": true,
+      "providerMetricsReinterpreted": false,
+      "sourceDrivenOutcomeDistribution": true,
+      "productionEvidenceGuard": "All draft, ranking, evaluation, statistics, and identity-link reads are restricted to non-fixture evidence; deterministic links are used only for summer parallel-cohort aggregation."
+    }
+  }
+}

@@ -14,3 +14,17 @@ mtime_ms = 1788280002785
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:69ab8d0e-2379-4b85-8569-9b3287ff4506/ef6ae939-8ee4-4343-8b8b-e39262ddae7f/6d81add6-ea4e-4d69-93e2-d436a15b31e1"
 storage_version_token = "1788280053045232"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "sUFT-6E5fjXt7jECak8dc"
+uri = "file://docs/validation/BLIND_HISTORICAL_VALIDATION_TEST_1_CURRENT_EVIDENCE_YEAR_AGNOSTIC_REPORT.json"
+type = "unspecified"
+title = "Blind Historical Validation Test #1 — Current-Evidence Year-Agnostic Report"
+description = "Frozen DiamondIQ report using the anonymous, never-previously-drafted profile and current production evidence. The original catcher-only baseline remains unchanged."
+logical_id = "f6233dfe-d5fb-4330-8010-a85e4a476fb1"
+content_hash = "sha256:87bec05bc894c372956c171a6850de449adfc306ae21921f6f0f12cc6e612111"
+size = 80307
+mtime_ms = 1788281284769
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:69ab8d0e-2379-4b85-8569-9b3287ff4506/f6233dfe-d5fb-4330-8010-a85e4a476fb1/ad0ed125-08fc-4259-9bb7-7800b12353dc"
+storage_version_token = "1788281318172402"
+content_type = "application/octet-stream"
