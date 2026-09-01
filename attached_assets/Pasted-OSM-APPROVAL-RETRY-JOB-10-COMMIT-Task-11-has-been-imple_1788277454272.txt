@@ -1,0 +1,82 @@
+OSM APPROVAL — RETRY JOB #10 COMMIT
+
+Task #11 has been implemented and validated.
+
+I now approve ONE transactional retry of Job #10 using the exact previously approved Batch 1 plan.
+
+Do not change:
+- source data
+- mappings
+- identity matching
+- statistics
+- provenance
+- missing-value handling
+- ranking logic
+- source-event key construction
+- approved dry-run counts
+
+Expected counts remain:
+
+Historical rankings: 7,250
+Evaluation observations: 5,995
+Player-season statistics: 18,733
+
+Perfect Game statistics: 9,758
+Cape Cod statistics: 6,575
+Appalachian League statistics: 2,400
+
+Deterministic links: 6,430
+Candidate source observations: 8,333
+Candidate relationship rows: 16,314
+Unlinked links: 9,965
+
+Unique source events: 24,728
+Review holds: 1
+Cape duplicates collapsed: 8
+Source assertions: 8,511
+Perfect Game ranking assertions: 8,503
+
+SAFEGUARDS
+
+- Do not overwrite existing canonical draft_players facts.
+- Do not create new canonical draft_players identities from unmatched observations.
+- Do not promote candidate links into canonical identity.
+- Missing values remain NULL.
+- Do not calculate missing statistics.
+- Do not reinterpret provider metrics.
+- Do not use fixture records.
+- Do not use general/model baseball knowledge.
+- Do not generate DiamondIQ inferences.
+
+If the transaction succeeds, immediately perform a read-only post-commit reconciliation and report:
+
+1. Job #10 final status
+2. Commit timestamp
+3. Rows actually created in each destination table
+4. Historical rankings by provider
+5. Player-season statistics by provider/league
+6. Identity links by state
+7. Unique source observations represented by those links
+8. Review holds created
+9. Cape duplicate provenance handling
+10. Source assertions created
+11. Existing canonical player facts overwritten
+12. New canonical player identities created
+13. Candidate links promoted
+14. Missing values filled/calculated
+15. Provider metrics reinterpreted
+16. Fixture records used
+17. General/model baseball knowledge used
+18. DiamondIQ inferences generated
+19. Source hash verification
+20. Any discrepancy from the approved dry-run counts
+
+If ANY material discrepancy occurs:
+- do not attempt to repair it automatically,
+- do not rerun,
+- do not change mappings,
+- stop and report the discrepancy.
+
+After reconciliation, STOP for OSM review.
+
+Do not begin backtesting or another ingestion batch.
