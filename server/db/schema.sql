@@ -473,6 +473,7 @@ CREATE TABLE IF NOT EXISTS player_evaluation_observations (
   source_url TEXT,
   source_provider TEXT NOT NULL,
   source_unique_id TEXT,
+  source_event_key TEXT NOT NULL,
   player_name TEXT NOT NULL,
   class_year INTEGER,
   state TEXT,
@@ -488,7 +489,7 @@ CREATE TABLE IF NOT EXISTS player_evaluation_observations (
     CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
   is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (source_file_version_id, source_worksheet, source_excel_row, observation_scope)
+  UNIQUE (source_event_key)
 );
 
 -- Layer 1: source-preserved player-season batting and pitching observations.
@@ -506,6 +507,7 @@ CREATE TABLE IF NOT EXISTS player_season_statistics (
   source_url TEXT,
   source_provider TEXT NOT NULL,
   source_unique_id TEXT,
+  source_event_key TEXT NOT NULL,
   player_name TEXT NOT NULL,
   league TEXT,
   season_year INTEGER,
@@ -522,7 +524,7 @@ CREATE TABLE IF NOT EXISTS player_season_statistics (
     CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
   is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (source_file_version_id, source_worksheet, source_excel_row, statistic_type)
+  UNIQUE (source_event_key)
 );
 
 -- Source observations and canonical draft-player identities are related here,

@@ -163,3 +163,8 @@ draft_players query: WHERE mlb_org = $club AND is_fixture=FALSE, ORDER BY draft_
 - Possible source-player relationships are `candidate_link` records, not ingestion review holds; only source rows that cannot be stored faithfully receive holds.
 - **Why:** Unlinked and ambiguous amateur observations remain valuable historical evidence, while thousands of manual holds obscure genuinely malformed records.
 - **How to apply:** Keep source observations separate from `draft_players`; create one candidate relationship per production candidate, retain matching fields/reason/provenance, and never auto-merge a candidate relationship.
+
+## Supplemental source-event identity
+- Evaluation and player-season observations use a deterministic source-event key built from original-source provenance and event context, with compiled coordinates only as a missing-origin fallback.
+- **Why:** A compiled workbook can contain independent providers that reuse worksheet names and row numbers, so container coordinates alone can reject legitimate observations.
+- **How to apply:** Uniqueness belongs on the event key, never fuzzy or canonical player identity; include provider/source namespace, source coordinate, season/type context, and source ID when supplied.

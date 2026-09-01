@@ -231,14 +231,42 @@ function stableSourceFingerprint(record: SourceRecord): string {
   return JSON.stringify(values);
 }
 
-function sourceEventKey(reference: SourceReference, kind: "evaluation" | "statistic"): string {
-  return [
-    kind,
+function sourceEventKey(
+  reference: SourceReference,
+  kind: "evaluation" | "statistic",
+  context: {
+    classYear?: number | null;
+    league?: string | null;
+    observationScope?: string | null;
+    seasonYear?: number | null;
+    sourceUniqueId?: string | null;
+    statisticType?: string | null;
+  } = {}
+): string {
+  // Keep the source-event namespace independent from canonical player identity.
+  // JSON array serialization avoids delimiter collisions while retaining the
+  // exact source-supported values that distinguish independent observations.
+  const originalSource = [
     reference.provider,
-    reference.sourceFile ?? "",
+    reference.sourceFile ?? null,
+    reference.sourceUrl ?? null,
     reference.sourceWorksheet,
     reference.sourceExcelRow,
-  ].join("|");
+  ];
+  const compiledFallback = !reference.sourceFile && !reference.sourceUrl
+    ? [reference.batchWorksheet, reference.batchExcelRow]
+    : null;
+  return `v1:${JSON.stringify([
+    kind,
+    originalSource,
+    context.classYear ?? null,
+    context.league ?? null,
+    context.observationScope ?? null,
+    context.seasonYear ?? null,
+    context.sourceUniqueId ?? null,
+    context.statisticType ?? null,
+    compiledFallback,
+  ])}`;
 }
 
 function compatiblePbrContext(
@@ -419,7 +447,10 @@ export function buildSupplementalEvidenceBatch1Plan(
           continue;
         }
         const scope = sheetName === "PBR HITTERS" ? "hitter" : "pitcher";
-        const eventKey = sourceEventKey(reference, "evaluation");
+        const eventKey = sourceEventKey(reference, "evaluation", {
+          classYear,
+          observationScope: scope,
+        });
         const school = text(record.School);
         const position = text(record.Position);
         const evaluation: EvaluationPlan = {
@@ -499,7 +530,11 @@ export function buildSupplementalEvidenceBatch1Plan(
           });
           continue;
         }
-        const eventKey = sourceEventKey(reference, "statistic");
+        const eventKey = sourceEventKey(reference, "statistic", {
+          seasonYear,
+          sourceUniqueId: playerId,
+          statisticType,
+        });
         const stats: StatisticPlan = {
           eventKey,
           playerName,
@@ -596,7 +631,11 @@ export function buildSupplementalEvidenceBatch1Plan(
         });
         continue;
       }
-      const eventKey = sourceEventKey(reference, "statistic");
+      const eventKey = sourceEventKey(reference, "statistic", {
+        league: isCape ? "Cape Cod Baseball League" : "Appalachian League",
+        seasonYear,
+        statisticType,
+      });
       const statistic: StatisticPlan = {
         eventKey,
         playerName,

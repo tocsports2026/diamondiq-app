@@ -1446,16 +1446,16 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
              (dataset_id, source_file_version_id, ingestion_job_id,
               source_worksheet, source_excel_row, source_excel_column, source_preamble,
               source_file, source_url, source_provider, source_unique_id, player_name,
-              class_year, state, school, position, commitment, observation_scope,
+              source_event_key, class_year, state, school, position, commitment, observation_scope,
               metrics, source_context, evidence_class, verification_status, is_fixture)
            VALUES ($1,$2,$3,$4,$5,'All source metrics',$6,$7,$8,$9,NULL,$10,
-                   $11,$12,$13,$14,$15,$16,$17,$18,'verified_public','unverified',FALSE)
+                   $11,$12,$13,$14,$15,$16,$17,$18,$19,'verified_public','unverified',FALSE)
            RETURNING id`,
           [
             datasetId, sfvId, jobId,
             source.sourceWorksheet, source.sourceExcelRow, source.sourcePreamble,
             source.sourceFile, source.sourceUrl, source.provider, evaluation.playerName,
-            evaluation.classYear, evaluation.state, evaluation.school, evaluation.position,
+            evaluation.eventKey, evaluation.classYear, evaluation.state, evaluation.school, evaluation.position,
             evaluation.commitment, evaluation.observationScope,
             JSON.stringify(evaluation.metrics), JSON.stringify(evaluation.sourceContext),
           ]
@@ -1473,16 +1473,16 @@ router.post("/:jobId/commit", requireAdmin, async (req, res) => {
              (dataset_id, source_file_version_id, ingestion_job_id,
               source_worksheet, source_excel_row, source_excel_column, source_preamble,
               source_file, source_url, source_provider, source_unique_id, player_name,
-              league, season_year, class_year, team, position, statistic_type, sample_scope,
+              source_event_key, league, season_year, class_year, team, position, statistic_type, sample_scope,
               statistics, source_context, evidence_class, verification_status, is_fixture)
            VALUES ($1,$2,$3,$4,$5,'All source metrics',$6,$7,$8,$9,$10,$11,
-                   $12,$13,$14,$15,$16,$17,$18,$19,$20,'verified_public','unverified',FALSE)
+                   $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'verified_public','unverified',FALSE)
            RETURNING id`,
           [
             datasetId, sfvId, jobId,
             source.sourceWorksheet, source.sourceExcelRow, source.sourcePreamble,
             source.sourceFile, source.sourceUrl, statistic.provider, statistic.sourceUniqueId,
-            statistic.playerName, statistic.league, statistic.seasonYear, statistic.classYear,
+            statistic.playerName, statistic.eventKey, statistic.league, statistic.seasonYear, statistic.classYear,
             statistic.team, statistic.position, statistic.statisticType, statistic.sampleScope,
             JSON.stringify(statistic.statistics), JSON.stringify(statistic.sourceContext),
           ]

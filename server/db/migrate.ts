@@ -678,6 +678,7 @@ export async function runMigrations() {
       source_url TEXT,
       source_provider TEXT NOT NULL,
       source_unique_id TEXT,
+      source_event_key TEXT NOT NULL,
       player_name TEXT NOT NULL,
       class_year INTEGER,
       state TEXT,
@@ -692,7 +693,7 @@ export async function runMigrations() {
         CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
       is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (source_file_version_id, source_worksheet, source_excel_row, observation_scope)
+      UNIQUE (source_event_key)
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_player_evaluation_observations_job
@@ -712,6 +713,7 @@ export async function runMigrations() {
       source_url TEXT,
       source_provider TEXT NOT NULL,
       source_unique_id TEXT,
+      source_event_key TEXT NOT NULL,
       player_name TEXT NOT NULL,
       league TEXT,
       season_year INTEGER,
@@ -727,11 +729,60 @@ export async function runMigrations() {
         CHECK (verification_status IN ('unverified','osm_reviewed','cross_verified')),
       is_fixture BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (source_file_version_id, source_worksheet, source_excel_row, statistic_type)
+      UNIQUE (source_event_key)
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_player_season_statistics_job
     ON player_season_statistics (ingestion_job_id)`);
+
+  // Existing deployments created the observation tables before source-event
+  // identity was approved. The current tables are empty; fail closed rather
+  // than inventing keys for any unexpected pre-existing rows.
+  await query(`
+    ALTER TABLE player_evaluation_observations
+      ADD COLUMN IF NOT EXISTS source_event_key TEXT
+  `);
+  await query(`
+    ALTER TABLE player_season_statistics
+      ADD COLUMN IF NOT EXISTS source_event_key TEXT
+  `);
+  await query(`
+    ALTER TABLE player_evaluation_observations
+      ALTER COLUMN source_event_key SET NOT NULL
+  `);
+  await query(`
+    ALTER TABLE player_season_statistics
+      ALTER COLUMN source_event_key SET NOT NULL
+  `);
+  await query(`
+    ALTER TABLE player_evaluation_observations
+      DROP CONSTRAINT IF EXISTS player_evaluation_observation_source_file_version_id_source_key
+  `);
+  await query(`
+    ALTER TABLE player_season_statistics
+      DROP CONSTRAINT IF EXISTS player_season_statistics_source_file_version_id_source_work_key
+  `);
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'player_evaluation_observations_source_event_key_key'
+      ) THEN
+        ALTER TABLE player_evaluation_observations
+          ADD CONSTRAINT player_evaluation_observations_source_event_key_key
+          UNIQUE (source_event_key);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'player_season_statistics_source_event_key_key'
+      ) THEN
+        ALTER TABLE player_season_statistics
+          ADD CONSTRAINT player_season_statistics_source_event_key_key
+          UNIQUE (source_event_key);
+      END IF;
+    END $$;
+  `);
 
   await query(`
     CREATE TABLE IF NOT EXISTS source_player_identity_links (
